@@ -1,0 +1,17 @@
+services:
+  minecraft-staging:
+    image: itzg/minecraft-server
+    environment:
+      TYPE: "PAPER"
+      VERSION: "26.2"
+      EULA: "TRUE"
+      MEMORY: "4G"
+      ONLINE_MODE: "TRUE"
+      MOTD: "STAGING LOCAL - desechable"
+    ports:
+      - "25565:25565"
+    volumes:
+      - ./staging-data:/data
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
