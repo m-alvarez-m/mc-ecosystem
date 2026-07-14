@@ -1,0 +1,6 @@
+name: EventCollector
+version: '0.1.0'
+main: com.mcecosystem.eventcollector.EventCollectorPlugin
+api-version: '26.2'
+description: Recolecta eventos del servidor y los envia a la API del ecosistema.
+author: miguel alvarez

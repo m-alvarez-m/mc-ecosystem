@@ -8,6 +8,7 @@ services:
       MEMORY: "4G"
       ONLINE_MODE: "TRUE"
       MOTD: "STAGING LOCAL - desechable"
+      EVENTS_API_URL: "http://host.docker.internal:3000/events"
     ports:
       - "25565:25565"
     volumes:
