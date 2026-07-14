@@ -6,3 +6,4 @@ dist/
 build/
 .claude/
 staging-data/
+pg-data/
