@@ -1,11 +1,14 @@
-import Fastify from "fastify";
+import Fastify, { FastifyServerOptions } from "fastify";
 import addFormats from "ajv-formats";
 import { eventRoutes } from "./routes/events";
 
+// ajv-formats habilita los formatos "uuid" y "date-time" del esquema.
+// Los tipos de ajv-formats y fastify discrepan; el cast puntual es inocuo.
+type AjvPlugin = NonNullable<NonNullable<FastifyServerOptions["ajv"]>["plugins"]>[number];
+
 const app = Fastify({
   logger: true,
-  // ajv-formats habilita los formatos "uuid" y "date-time" del esquema.
-  ajv: { plugins: [addFormats] },
+  ajv: { plugins: [addFormats as unknown as AjvPlugin] },
 });
 
 app.get("/health", async () => ({ status: "ok" }));
