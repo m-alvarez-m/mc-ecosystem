@@ -23,10 +23,10 @@ public final class ActivityTracker {
 
     private final Map<UUID, Long> lastActivity = new ConcurrentHashMap<>();
     private final Map<UUID, Long> afkSince = new ConcurrentHashMap<>();
-    private final EventSender sender;
+    private final EventOutput sender;
     private final long thresholdMillis;
 
-    public ActivityTracker(EventSender sender, int thresholdSeconds) {
+    public ActivityTracker(EventOutput sender, int thresholdSeconds) {
         this.sender = sender;
         this.thresholdMillis = thresholdSeconds * 1000L;
     }
@@ -36,7 +36,7 @@ public final class ActivityTracker {
         lastActivity.put(playerUuid, now);
         Long since = afkSince.remove(playerUuid);
         if (since != null) {
-            emitAfkEnd(playerUuid, (now - since) / 1000);
+            emitAfkEnd(playerUuid, (now - since) / 1000, false);
         }
     }
 
@@ -68,15 +68,31 @@ public final class ActivityTracker {
         lastActivity.remove(playerUuid);
         Long since = afkSince.remove(playerUuid);
         if (since != null) {
-            emitAfkEnd(playerUuid, (System.currentTimeMillis() - since) / 1000);
+            emitAfkEnd(playerUuid, (System.currentTimeMillis() - since) / 1000, false);
         }
     }
 
-    private void emitAfkEnd(UUID playerUuid, long afkDurationSeconds) {
+    /**
+     * Como handleQuit, pero durante el apagado del servidor: el afk_end va
+     * directo al buffer, porque un POST async ya no llegaría a completarse.
+     */
+    public void handleShutdown(UUID playerUuid) {
+        lastActivity.remove(playerUuid);
+        Long since = afkSince.remove(playerUuid);
+        if (since != null) {
+            emitAfkEnd(playerUuid, (System.currentTimeMillis() - since) / 1000, true);
+        }
+    }
+
+    private void emitAfkEnd(UUID playerUuid, long afkDurationSeconds, boolean durable) {
         JsonObject data = new JsonObject();
         data.addProperty("afk_duration_s", afkDurationSeconds);
         JsonObject json = EventJson.base("session.afk_end", playerUuid);
         json.add("data", data);
-        sender.send(EventJson.eventUuid(json), json.toString());
+        if (durable) {
+            sender.storeDurable(EventJson.eventUuid(json), json.toString());
+        } else {
+            sender.send(EventJson.eventUuid(json), json.toString());
+        }
     }
 }

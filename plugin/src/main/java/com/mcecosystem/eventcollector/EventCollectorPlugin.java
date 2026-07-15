@@ -23,6 +23,7 @@ public final class EventCollectorPlugin extends JavaPlugin {
     private EventSender eventSender;
     private ActivityTracker activityTracker;
     private DamageAggregator damageAggregator;
+    private SessionListener sessionListener;
     private long startedAtMillis;
 
     @Override
@@ -48,9 +49,9 @@ public final class EventCollectorPlugin extends JavaPlugin {
         activityTracker = new ActivityTracker(eventSender, afkThreshold);
         damageAggregator = new DamageAggregator();
         MilestoneTracker milestoneTracker = new MilestoneTracker(eventSender, buffer);
+        sessionListener = new SessionListener(eventSender, activityTracker);
         getServer().getPluginManager().registerEvents(new BlockBreakListener(eventSender), this);
-        getServer().getPluginManager().registerEvents(
-                new SessionListener(eventSender, activityTracker), this);
+        getServer().getPluginManager().registerEvents(sessionListener, this);
         getServer().getPluginManager().registerEvents(
                 new CombatListener(eventSender, damageAggregator), this);
         getServer().getPluginManager().registerEvents(
@@ -188,6 +189,11 @@ public final class EventCollectorPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (sessionListener != null) {
+            // Los jugadores siguen conectados en este punto (Paper deshabilita
+            // plugins antes de expulsarlos): cerrar sus sesiones al buffer.
+            sessionListener.flushForShutdown();
+        }
         if (eventSender != null) {
             // server.stop directo al buffer: durante el apagado no hay
             // garantía de que un POST async llegue a completarse.

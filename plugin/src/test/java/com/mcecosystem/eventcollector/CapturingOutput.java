@@ -12,6 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 final class CapturingOutput implements EventOutput {
 
     final List<JsonObject> events = new ArrayList<>();
+    /** Subconjunto de events que entró por storeDurable (camino de apagado). */
+    final List<JsonObject> durable = new ArrayList<>();
 
     @Override
     public void send(String eventUuid, String jsonBody) {
@@ -20,7 +22,9 @@ final class CapturingOutput implements EventOutput {
 
     @Override
     public void storeDurable(String eventUuid, String jsonBody) {
-        send(eventUuid, jsonBody);
+        JsonObject json = JsonParser.parseString(jsonBody).getAsJsonObject();
+        events.add(json);
+        durable.add(json);
     }
 
     List<JsonObject> ofType(String type) {

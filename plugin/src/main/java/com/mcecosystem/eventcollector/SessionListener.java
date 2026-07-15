@@ -27,13 +27,39 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class SessionListener implements Listener {
 
-    private final EventSender sender;
+    private final EventOutput sender;
     private final ActivityTracker tracker;
     private final Map<UUID, Long> joinTimes = new ConcurrentHashMap<>();
 
-    public SessionListener(EventSender sender, ActivityTracker tracker) {
+    public SessionListener(EventOutput sender, ActivityTracker tracker) {
         this.sender = sender;
         this.tracker = tracker;
+    }
+
+    /**
+     * Cierre síncrono de TODAS las sesiones aún abiertas, para onDisable.
+     * En el apagado de Paper los plugins se deshabilitan ANTES de expulsar a
+     * los jugadores, así que onQuit ya no corre para ellos: sin este flush
+     * sus session.end se pierden. joinTimes solo contiene sesiones sin
+     * cerrar (onQuit elimina la suya), de modo que no hay duplicados y el
+     * método es idempotente. Todo va directo al buffer: durante el apagado
+     * un POST async no tiene garantía de completarse.
+     */
+    public void flushForShutdown() {
+        for (Map.Entry<UUID, Long> entry : Map.copyOf(joinTimes).entrySet()) {
+            UUID uuid = entry.getKey();
+            joinTimes.remove(uuid);
+            // Orden lógico de la sesión: primero se cierra el tramo AFK.
+            tracker.handleShutdown(uuid);
+
+            JsonObject data = new JsonObject();
+            data.addProperty("duration_s",
+                    (System.currentTimeMillis() - entry.getValue()) / 1000);
+            data.addProperty("reason", "server_stop");
+            JsonObject json = EventJson.base("session.end", uuid);
+            json.add("data", data);
+            sender.storeDurable(EventJson.eventUuid(json), json.toString());
+        }
     }
 
     // ---------- sesión ----------
