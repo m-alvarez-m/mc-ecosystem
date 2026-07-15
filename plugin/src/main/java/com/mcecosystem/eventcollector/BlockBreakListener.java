@@ -38,8 +38,9 @@ public final class BlockBreakListener implements Listener {
         data.addProperty("silk", tool.containsEnchantment(Enchantment.SILK_TOUCH));
         data.addProperty("fortune", tool.getEnchantmentLevel(Enchantment.FORTUNE));
 
+        String eventUuid = UUID.randomUUID().toString();
         JsonObject json = new JsonObject();
-        json.addProperty("event_uuid", UUID.randomUUID().toString());
+        json.addProperty("event_uuid", eventUuid);
         json.addProperty("type", "block.break");
         json.addProperty("v", 1);
         json.addProperty("ts", Instant.now().toString()); // UTC, ISO-8601
@@ -50,6 +51,6 @@ public final class BlockBreakListener implements Listener {
         json.addProperty("z", block.getZ());
         json.add("data", data);
 
-        sender.send(json.toString());
+        sender.send(eventUuid, json.toString());
     }
 }

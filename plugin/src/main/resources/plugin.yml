@@ -4,3 +4,5 @@ main: com.mcecosystem.eventcollector.EventCollectorPlugin
 api-version: '26.2'
 description: Recolecta eventos del servidor y los envia a la API del ecosistema.
 author: miguel alvarez
+libraries:
+  - org.xerial:sqlite-jdbc:3.53.2.0

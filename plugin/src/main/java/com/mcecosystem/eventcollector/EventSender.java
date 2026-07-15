@@ -9,45 +9,70 @@ import java.util.logging.Logger;
 
 /**
  * Envía eventos a la API por HTTP POST de forma asíncrona.
- * sendAsync usa el executor interno del HttpClient: la red jamás
- * bloquea el hilo principal del servidor.
+ * Si la entrega falla (red, timeout, o respuesta no exitosa), el evento
+ * se guarda en el buffer local; una tarea periódica lo reintentará.
  */
 public final class EventSender {
 
     private final HttpClient http;
     private final URI endpoint;
+    private final EventBuffer buffer;
     private final Logger logger;
 
-    public EventSender(String endpointUrl, Logger logger) {
+    public EventSender(String endpointUrl, EventBuffer buffer, Logger logger) {
         this.endpoint = URI.create(endpointUrl);
+        this.buffer = buffer;
         this.logger = logger;
         this.http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .build();
     }
 
-    public void send(String jsonBody) {
-        HttpRequest request = HttpRequest.newBuilder(endpoint)
+    private HttpRequest buildRequest(String jsonBody) {
+        return HttpRequest.newBuilder(endpoint)
                 .header("Content-Type", "application/json")
                 .timeout(Duration.ofSeconds(10))
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                 .build();
+    }
 
-        http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+    /** 2xx = aceptado; 409 = ya estaba en la DB (reintento benigno). */
+    private static boolean isDelivered(int statusCode) {
+        return statusCode / 100 == 2 || statusCode == 409;
+    }
+
+    /** Camino normal: asíncrono, jamás bloquea al llamante. */
+    public void send(String eventUuid, String jsonBody) {
+        http.sendAsync(buildRequest(jsonBody), HttpResponse.BodyHandlers.ofString())
                 .whenComplete((response, error) -> {
                     if (error != null) {
-                        // TODO: buffer local con reintentos (próxima iteración).
-                        logger.warning("No se pudo enviar el evento a la API: " + error.getMessage());
-                    } else if (response.statusCode() != 201 && response.statusCode() != 409) {
-                        // 409 = evento duplicado (reintento benigno), no es un fallo.
+                        buffer.store(eventUuid, jsonBody);
+                        logger.warning("API inalcanzable (" + error.getMessage()
+                                + "). Evento guardado en buffer local ("
+                                + buffer.count() + " pendientes).");
+                    } else if (!isDelivered(response.statusCode())) {
+                        buffer.store(eventUuid, jsonBody);
                         logger.warning("La API rechazó el evento (HTTP " + response.statusCode()
-                                + "): " + response.body());
+                                + "). Guardado en buffer local. Respuesta: " + response.body());
                     }
                 });
     }
 
+    /**
+     * Camino de reintento: bloqueante a propósito. Solo se llama desde el
+     * hilo asíncrono del scheduler, nunca desde el hilo principal.
+     */
+    public boolean sendBlocking(String jsonBody) {
+        try {
+            HttpResponse<String> response =
+                    http.send(buildRequest(jsonBody), HttpResponse.BodyHandlers.ofString());
+            return isDelivered(response.statusCode());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public void shutdown() {
-        // HttpClient no requiere cierre explícito en Java 21; el método queda
-        // como punto de extensión para cuando exista el buffer local.
+        // HttpClient no requiere cierre explícito en Java 21+.
     }
 }
