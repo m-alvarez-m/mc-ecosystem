@@ -72,6 +72,14 @@ public final class EventSender {
         }
     }
 
+    /**
+     * Escribe directo al buffer sin intentar la red. Para eventos emitidos
+     * durante el apagado del servidor: se entregan en el próximo arranque.
+     */
+    public void storeDurable(String eventUuid, String jsonBody) {
+        buffer.store(eventUuid, jsonBody);
+    }
+
     public void shutdown() {
         // HttpClient no requiere cierre explícito en Java 21+.
     }

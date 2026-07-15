@@ -1,0 +1,2 @@
+# Segundos sin input (movimiento, chat, clics, comandos) para marcar AFK.
+afk_threshold_seconds: 300

@@ -8,13 +8,18 @@ import java.util.List;
 public final class EventCollectorPlugin extends JavaPlugin {
 
     private static final long RETRY_PERIOD_TICKS = 20L * 30; // 30 segundos
+    private static final long AFK_POLL_PERIOD_TICKS = 20L;   // 1 segundo
     private static final int RETRY_BATCH_SIZE = 100;
 
     private EventBuffer buffer;
     private EventSender eventSender;
+    private ActivityTracker activityTracker;
 
     @Override
     public void onEnable() {
+        saveDefaultConfig();
+        int afkThreshold = getConfig().getInt("afk_threshold_seconds", 300);
+
         // TODO: mover la URL a config.yml cuando haya más opciones.
         // En Docker, localhost es el contenedor: se sobreescribe con EVENTS_API_URL.
         String apiUrl = System.getenv().getOrDefault("EVENTS_API_URL", "http://localhost:3000/events");
@@ -28,13 +33,22 @@ public final class EventCollectorPlugin extends JavaPlugin {
         }
 
         eventSender = new EventSender(apiUrl, buffer, getLogger());
+        activityTracker = new ActivityTracker(eventSender, afkThreshold);
         getServer().getPluginManager().registerEvents(new BlockBreakListener(eventSender), this);
+        getServer().getPluginManager().registerEvents(
+                new SessionListener(eventSender, activityTracker), this);
+
+        // Poller de AFK: síncrono (lee jugadores online), 1 vez por segundo.
+        getServer().getScheduler().runTaskTimer(this,
+                () -> activityTracker.poll(getServer().getOnlinePlayers()),
+                AFK_POLL_PERIOD_TICKS, AFK_POLL_PERIOD_TICKS);
 
         // Reintento periódico en un hilo ASÍNCRONO: ahí sí podemos bloquear.
         getServer().getScheduler().runTaskTimerAsynchronously(
                 this, this::flushBuffer, RETRY_PERIOD_TICKS, RETRY_PERIOD_TICKS);
 
-        getLogger().info("EventCollector activo. Endpoint: " + apiUrl);
+        getLogger().info("EventCollector activo. Endpoint: " + apiUrl
+                + " | umbral AFK: " + afkThreshold + "s");
         int pending = buffer.count();
         if (pending > 0) {
             getLogger().info(pending + " eventos pendientes de una sesión anterior; se reintentarán.");
