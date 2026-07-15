@@ -21,8 +21,9 @@ dependencies {
     // La API de test debe COINCIDIR con la versión de MockBukkit: sus datos
     // internos (registries) se generan por versión de Minecraft.
     testImplementation("io.papermc.paper:paper-api:26.1.2.build.74-stable")
-    // En producción gson lo aporta el servidor; en tests hay que traerlo.
+    // En producción gson y sqlite los aporta el servidor; en tests hay que traerlos.
     testImplementation("com.google.code.gson:gson:2.11.0")
+    testImplementation("org.xerial:sqlite-jdbc:3.53.2.0")
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

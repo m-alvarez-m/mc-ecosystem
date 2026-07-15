@@ -44,6 +44,26 @@ public final class EventBuffer implements AutoCloseable {
                   json        TEXT NOT NULL,
                   buffered_at TEXT NOT NULL DEFAULT (datetime('now'))
                 )""");
+            st.execute("""
+                CREATE TABLE IF NOT EXISTS milestones (
+                  what        TEXT PRIMARY KEY,
+                  achieved_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )""");
+        }
+    }
+
+    /**
+     * Reclama un hito único en la historia del servidor. La PRIMARY KEY hace
+     * el claim atómico y persistente: devuelve true solo la primera vez.
+     */
+    public synchronized boolean claimMilestone(String what) {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "INSERT OR IGNORE INTO milestones (what) VALUES (?)")) {
+            ps.setString(1, what);
+            return ps.executeUpdate() == 1;
+        } catch (SQLException e) {
+            logger.severe("No se pudo reclamar el hito '" + what + "': " + e.getMessage());
+            return false;
         }
     }
 

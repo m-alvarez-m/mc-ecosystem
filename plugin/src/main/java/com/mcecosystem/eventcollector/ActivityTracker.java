@@ -58,6 +58,11 @@ public final class ActivityTracker {
         }
     }
 
+    /** Consultado por position.sample: los AFK no se muestrean (decisión B). */
+    public boolean isAfk(UUID playerUuid) {
+        return afkSince.containsKey(playerUuid);
+    }
+
     /** Al desconectarse: limpia estado y cierra el tramo AFK si estaba abierto. */
     public void handleQuit(UUID playerUuid) {
         lastActivity.remove(playerUuid);

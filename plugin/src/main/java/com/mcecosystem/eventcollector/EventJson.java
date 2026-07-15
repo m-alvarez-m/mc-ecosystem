@@ -25,4 +25,11 @@ final class EventJson {
     static String eventUuid(JsonObject json) {
         return json.get("event_uuid").getAsString();
     }
+
+    static void position(JsonObject json, org.bukkit.Location loc) {
+        json.addProperty("world", loc.getWorld().getName());
+        json.addProperty("x", loc.getBlockX());
+        json.addProperty("y", loc.getBlockY());
+        json.addProperty("z", loc.getBlockZ());
+    }
 }

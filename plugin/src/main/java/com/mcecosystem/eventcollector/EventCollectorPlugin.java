@@ -1,6 +1,9 @@
 package com.mcecosystem.eventcollector;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.sql.SQLException;
@@ -13,17 +16,21 @@ public final class EventCollectorPlugin extends JavaPlugin {
     private static final long RETRY_PERIOD_TICKS = 20L * 30;   // 30 segundos
     private static final long AFK_POLL_PERIOD_TICKS = 20L;     // 1 segundo
     private static final long DAMAGE_FLUSH_TICKS = 20L * 60;   // 1 minuto
+    private static final long TPS_SAMPLE_TICKS = 20L * 60;     // 1 minuto (catálogo)
     private static final int RETRY_BATCH_SIZE = 100;
 
     private EventBuffer buffer;
     private EventSender eventSender;
     private ActivityTracker activityTracker;
     private DamageAggregator damageAggregator;
+    private long startedAtMillis;
 
     @Override
     public void onEnable() {
+        startedAtMillis = System.currentTimeMillis();
         saveDefaultConfig();
         int afkThreshold = getConfig().getInt("afk_threshold_seconds", 300);
+        int positionSeconds = getConfig().getInt("position_sample_seconds", 60);
 
         // TODO: mover la URL a config.yml cuando haya más opciones.
         // En Docker, localhost es el contenedor: se sobreescribe con EVENTS_API_URL.
@@ -40,11 +47,18 @@ public final class EventCollectorPlugin extends JavaPlugin {
         eventSender = new EventSender(apiUrl, buffer, getLogger());
         activityTracker = new ActivityTracker(eventSender, afkThreshold);
         damageAggregator = new DamageAggregator();
+        MilestoneTracker milestoneTracker = new MilestoneTracker(eventSender, buffer);
         getServer().getPluginManager().registerEvents(new BlockBreakListener(eventSender), this);
         getServer().getPluginManager().registerEvents(
                 new SessionListener(eventSender, activityTracker), this);
         getServer().getPluginManager().registerEvents(
                 new CombatListener(eventSender, damageAggregator), this);
+        getServer().getPluginManager().registerEvents(
+                new WorldListener(eventSender, milestoneTracker), this);
+        getServer().getPluginManager().registerEvents(
+                new ProgressListener(eventSender, milestoneTracker), this);
+        getServer().getPluginManager().registerEvents(new EconomyListener(eventSender), this);
+        getServer().getPluginManager().registerEvents(new ChatListener(eventSender), this);
 
         // Poller de AFK: síncrono (lee jugadores online), 1 vez por segundo.
         getServer().getScheduler().runTaskTimer(this,
@@ -61,16 +75,75 @@ public final class EventCollectorPlugin extends JavaPlugin {
             }
         }, DAMAGE_FLUSH_TICKS, DAMAGE_FLUSH_TICKS);
 
+        // position.sample: cada N segundos, solo jugadores NO-AFK (decisión B).
+        long positionTicks = positionSeconds * 20L;
+        getServer().getScheduler().runTaskTimer(this, this::samplePositions,
+                positionTicks, positionTicks);
+
+        // server.tps_sample: salud del servidor cada minuto.
+        getServer().getScheduler().runTaskTimer(this, this::sampleTps,
+                TPS_SAMPLE_TICKS, TPS_SAMPLE_TICKS);
+
         // Reintento periódico en un hilo ASÍNCRONO: ahí sí podemos bloquear.
         getServer().getScheduler().runTaskTimerAsynchronously(
                 this, this::flushBuffer, RETRY_PERIOD_TICKS, RETRY_PERIOD_TICKS);
 
+        emitServerStart();
+
         getLogger().info("EventCollector activo. Endpoint: " + apiUrl
-                + " | umbral AFK: " + afkThreshold + "s");
+                + " | umbral AFK: " + afkThreshold + "s"
+                + " | muestreo posicion: " + positionSeconds + "s");
         int pending = buffer.count();
         if (pending > 0) {
             getLogger().info(pending + " eventos pendientes de una sesión anterior; se reintentarán.");
         }
+    }
+
+    private void emitServerStart() {
+        JsonArray plugins = new JsonArray();
+        for (Plugin p : getServer().getPluginManager().getPlugins()) {
+            JsonObject entry = new JsonObject();
+            entry.addProperty("name", p.getName());
+            entry.addProperty("version", p.getPluginMeta().getVersion());
+            plugins.add(entry);
+        }
+        JsonObject data = new JsonObject();
+        data.addProperty("mc_version", getServer().getMinecraftVersion());
+        data.add("plugins", plugins);
+
+        JsonObject json = EventJson.base("server.start", null);
+        json.add("data", data);
+        eventSender.send(EventJson.eventUuid(json), json.toString());
+    }
+
+    /** Síncrono: lee posiciones y biomas, que es API de mundo. */
+    private void samplePositions() {
+        for (Player player : getServer().getOnlinePlayers()) {
+            if (activityTracker.isAfk(player.getUniqueId())) {
+                continue; // decisión B: los AFK no dejan rastro de posición
+            }
+            JsonObject data = new JsonObject();
+            data.addProperty("biome",
+                    player.getLocation().getBlock().getBiome().getKey().toString());
+
+            JsonObject json = EventJson.base("position.sample", player.getUniqueId());
+            EventJson.position(json, player.getLocation());
+            json.add("data", data);
+            eventSender.send(EventJson.eventUuid(json), json.toString());
+        }
+    }
+
+    private void sampleTps() {
+        JsonObject data = new JsonObject();
+        data.addProperty("tps_1m", Math.round(getServer().getTPS()[0] * 100.0) / 100.0);
+        data.addProperty("mspt", Math.round(getServer().getAverageTickTime() * 100.0) / 100.0);
+        data.addProperty("players_online", getServer().getOnlinePlayers().size());
+        data.addProperty("ram_used_mb",
+                (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1048576);
+
+        JsonObject json = EventJson.base("server.tps_sample", null);
+        json.add("data", data);
+        eventSender.send(EventJson.eventUuid(json), json.toString());
     }
 
     /** Corre en hilo async; el mapa ya es huérfano y solo contiene primitivos. */
@@ -116,6 +189,13 @@ public final class EventCollectorPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (eventSender != null) {
+            // server.stop directo al buffer: durante el apagado no hay
+            // garantía de que un POST async llegue a completarse.
+            JsonObject data = new JsonObject();
+            data.addProperty("uptime_s", (System.currentTimeMillis() - startedAtMillis) / 1000);
+            JsonObject json = EventJson.base("server.stop", null);
+            json.add("data", data);
+            eventSender.storeDurable(EventJson.eventUuid(json), json.toString());
             eventSender.shutdown();
         }
         if (buffer != null) {
