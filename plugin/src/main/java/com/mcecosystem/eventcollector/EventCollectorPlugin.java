@@ -1,19 +1,24 @@
 package com.mcecosystem.eventcollector;
 
+import com.google.gson.JsonObject;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public final class EventCollectorPlugin extends JavaPlugin {
 
-    private static final long RETRY_PERIOD_TICKS = 20L * 30; // 30 segundos
-    private static final long AFK_POLL_PERIOD_TICKS = 20L;   // 1 segundo
+    private static final long RETRY_PERIOD_TICKS = 20L * 30;   // 30 segundos
+    private static final long AFK_POLL_PERIOD_TICKS = 20L;     // 1 segundo
+    private static final long DAMAGE_FLUSH_TICKS = 20L * 60;   // 1 minuto
     private static final int RETRY_BATCH_SIZE = 100;
 
     private EventBuffer buffer;
     private EventSender eventSender;
     private ActivityTracker activityTracker;
+    private DamageAggregator damageAggregator;
 
     @Override
     public void onEnable() {
@@ -34,14 +39,27 @@ public final class EventCollectorPlugin extends JavaPlugin {
 
         eventSender = new EventSender(apiUrl, buffer, getLogger());
         activityTracker = new ActivityTracker(eventSender, afkThreshold);
+        damageAggregator = new DamageAggregator();
         getServer().getPluginManager().registerEvents(new BlockBreakListener(eventSender), this);
         getServer().getPluginManager().registerEvents(
                 new SessionListener(eventSender, activityTracker), this);
+        getServer().getPluginManager().registerEvents(
+                new CombatListener(eventSender, damageAggregator), this);
 
         // Poller de AFK: síncrono (lee jugadores online), 1 vez por segundo.
         getServer().getScheduler().runTaskTimer(this,
                 () -> activityTracker.poll(getServer().getOnlinePlayers()),
                 AFK_POLL_PERIOD_TICKS, AFK_POLL_PERIOD_TICKS);
+
+        // damage.minute: swap síncrono O(1) del acumulador (mismo hilo que
+        // escribe = sin carreras) y construcción/envío en un hilo async.
+        getServer().getScheduler().runTaskTimer(this, () -> {
+            Map<UUID, DamageAggregator.Stats> minute = damageAggregator.swap();
+            if (!minute.isEmpty()) {
+                getServer().getScheduler().runTaskAsynchronously(
+                        this, () -> emitDamageMinute(minute));
+            }
+        }, DAMAGE_FLUSH_TICKS, DAMAGE_FLUSH_TICKS);
 
         // Reintento periódico en un hilo ASÍNCRONO: ahí sí podemos bloquear.
         getServer().getScheduler().runTaskTimerAsynchronously(
@@ -52,6 +70,22 @@ public final class EventCollectorPlugin extends JavaPlugin {
         int pending = buffer.count();
         if (pending > 0) {
             getLogger().info(pending + " eventos pendientes de una sesión anterior; se reintentarán.");
+        }
+    }
+
+    /** Corre en hilo async; el mapa ya es huérfano y solo contiene primitivos. */
+    private void emitDamageMinute(Map<UUID, DamageAggregator.Stats> minute) {
+        for (Map.Entry<UUID, DamageAggregator.Stats> entry : minute.entrySet()) {
+            DamageAggregator.Stats s = entry.getValue();
+            JsonObject data = new JsonObject();
+            data.addProperty("dealt", Math.round(s.dealt * 100.0) / 100.0);
+            data.addProperty("taken", Math.round(s.taken * 100.0) / 100.0);
+            data.addProperty("hits_dealt", s.hitsDealt);
+            data.addProperty("hits_taken", s.hitsTaken);
+
+            JsonObject json = EventJson.base("damage.minute", entry.getKey());
+            json.add("data", data);
+            eventSender.send(EventJson.eventUuid(json), json.toString());
         }
     }
 

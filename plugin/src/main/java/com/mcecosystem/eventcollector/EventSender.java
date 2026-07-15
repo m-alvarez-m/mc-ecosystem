@@ -12,7 +12,7 @@ import java.util.logging.Logger;
  * Si la entrega falla (red, timeout, o respuesta no exitosa), el evento
  * se guarda en el buffer local; una tarea periódica lo reintentará.
  */
-public final class EventSender {
+public final class EventSender implements EventOutput {
 
     private final HttpClient http;
     private final URI endpoint;
@@ -42,6 +42,7 @@ public final class EventSender {
     }
 
     /** Camino normal: asíncrono, jamás bloquea al llamante. */
+    @Override
     public void send(String eventUuid, String jsonBody) {
         http.sendAsync(buildRequest(jsonBody), HttpResponse.BodyHandlers.ofString())
                 .whenComplete((response, error) -> {
@@ -76,6 +77,7 @@ public final class EventSender {
      * Escribe directo al buffer sin intentar la red. Para eventos emitidos
      * durante el apagado del servidor: se entregan en el próximo arranque.
      */
+    @Override
     public void storeDurable(String eventUuid, String jsonBody) {
         buffer.store(eventUuid, jsonBody);
     }
