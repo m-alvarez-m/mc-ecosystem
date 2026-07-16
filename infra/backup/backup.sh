@@ -21,8 +21,20 @@ case "$kind" in
         rm -f "$dump"
         ;;
     world)
-        # El mundo se monta read-only en /data/staging. Copia en caliente:
-        # aceptable en staging; TODO producción: save-off por rcon antes.
+        # save-off + save-all flush: copia consistente. Si el servidor está
+        # apagado no hay escrituras en curso, así que se copia igual.
+        rcon() {
+            rcon-cli --host "${RCON_HOST}" --port "${RCON_PORT:-25575}" \
+                --password "${RCON_PASSWORD}" "$@"
+        }
+        saves_off=false
+        if rcon save-off >/dev/null 2>&1 && rcon save-all flush >/dev/null 2>&1; then
+            saves_off=true
+            sleep 3 # margen para que el flush termine de tocar disco
+        else
+            echo "AVISO: rcon inalcanzable (¿servidor apagado?); copia sin save-off" >&2
+        fi
+
         shopt -s nullglob
         worlds=(/data/staging/world*)
         if [ ${#worlds[@]} -gt 0 ]; then
@@ -31,6 +43,12 @@ case "$kind" in
         else
             echo "No hay directorios world* que respaldar" >&2
             ok=false
+        fi
+
+        # Pase lo que pase con restic, el autosave vuelve a quedar activo.
+        if [ "$saves_off" = true ]; then
+            rcon save-on >/dev/null 2>&1 \
+                || echo "CRITICO: no se pudo reactivar save-on" >&2
         fi
         ;;
     *)

@@ -29,6 +29,9 @@ services:
       PGPASSWORD: "${POSTGRES_PASSWORD}"
       PGDATABASE: "mc_ecosystem"
       EVENTS_API_URL: "http://api:3000/events"
+      # rcon del staging para save-off/save-on durante el backup del mundo.
+      RCON_HOST: "minecraft-staging"
+      RCON_PASSWORD: "${RCON_PASSWORD}"
     volumes:
       - ./backup-repo:/repo
       # Read-only: el backup jamás puede tocar el mundo.
