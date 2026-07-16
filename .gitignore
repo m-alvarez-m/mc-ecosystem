@@ -7,4 +7,5 @@ build/
 .claude/
 staging-data/
 pg-data/
+backup-repo/
 .gradle/

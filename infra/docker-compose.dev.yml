@@ -17,6 +17,27 @@ services:
       retries: 5
     restart: unless-stopped
 
+  backup:
+    build: ./backup
+    environment:
+      # Fase local: repositorio restic en disco. Migración a Backblaze B2 en
+      # el despliegue real = cambiar RESTIC_REPOSITORY + credenciales B2.
+      RESTIC_REPOSITORY: "/repo"
+      RESTIC_PASSWORD: "${RESTIC_PASSWORD}"
+      PGHOST: "postgres"
+      PGUSER: "mc"
+      PGPASSWORD: "${POSTGRES_PASSWORD}"
+      PGDATABASE: "mc_ecosystem"
+      EVENTS_API_URL: "http://api:3000/events"
+    volumes:
+      - ./backup-repo:/repo
+      # Read-only: el backup jamás puede tocar el mundo.
+      - ./staging-data:/data/staging:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   postgres:
     image: postgres:16
     environment:

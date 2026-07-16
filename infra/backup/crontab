@@ -1,0 +1,4 @@
+# DB cada hora en punto; mundo cada 6 h a los :15 para no solaparse.
+# La retención (30 días) la aplica backup.sh tras cada ejecución.
+0 * * * * /scripts/backup.sh db
+15 */6 * * * /scripts/backup.sh world

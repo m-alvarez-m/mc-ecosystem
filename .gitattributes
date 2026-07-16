@@ -1,0 +1,3 @@
+# Los .sh corren en contenedores Alpine: siempre LF, aunque el checkout sea Windows.
+*.sh text eol=lf
+gradlew text eol=lf
