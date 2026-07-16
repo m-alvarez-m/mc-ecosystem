@@ -1,0 +1,23 @@
+# AuthMe — config versionada (ADR-001, modo offline).
+# Solo las claves que nos apartan del default; AuthMe completa el resto.
+settings:
+  registration:
+    # Registro OBLIGATORIO en el primer login: sin cuenta no se juega.
+    force: true
+  sessions:
+    # Sesión por IP: reconectar desde la misma IP dentro de la ventana
+    # no vuelve a pedir /login (que la seguridad no se vuelva fricción).
+    enabled: true
+    # Minutos de validez de la sesión (8 horas).
+    timeout: 480
+  restrictions:
+    # Segundos para autenticarse antes del kick.
+    timeout: 60
+    # Sin chat ni comandos antes de autenticar.
+    allowChat: false
+    allowedRestrictedCommands:
+      - /login
+      - /register
+security:
+  minPasswordLength: 8
+  passwordHash: 'BCRYPT'

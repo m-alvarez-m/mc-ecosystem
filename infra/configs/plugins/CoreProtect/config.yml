@@ -1,0 +1,16 @@
+# CoreProtect — config versionada. SQLite local (sin MySQL en esta fase).
+# Solo claves relevantes; CoreProtect completa el resto con sus defaults.
+use-mysql: false
+# Días que se conserva el registro de acciones antes de purgarse.
+delete-older-than: 90
+# Qué se registra (todo lo que sirve para investigar grief).
+block-place: true
+block-break: true
+natural-break: true
+explosions: true
+entity-kills: true
+item-transactions: true
+player-interactions: true
+player-messages: true
+player-commands: true
+player-sessions: true

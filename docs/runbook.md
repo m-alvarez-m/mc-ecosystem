@@ -1,3 +1,91 @@
 # Runbook
 
 Procedimientos operativos para desplegar, monitorear y recuperar el sistema ante incidentes.
+
+## Alta de un jugador nuevo
+
+El servidor es offline-mode con whitelist + AuthMe (ver ADR-001). Para dar de
+alta a alguien hacen falta DOS pasos y UN sermón:
+
+1. **Whitelist** (consola o rcon), con el nombre EXACTO (mayúsculas incluidas):
+
+   ```
+   docker exec mc-ecosystem-minecraft-staging-1 rcon-cli "whitelist add <Nombre>"
+   ```
+
+   La whitelist vive en `whitelist.json` del volumen (`infra/staging-data/`)
+   y sobrevive reinicios. NO se gestiona por env del compose: el
+   sincronizador del contenedor resuelve nombres contra Mojang (UUIDs
+   premium) y en modo offline eso escribe UUIDs equivocados que dejan a
+   todo el mundo fuera. Siempre por rcon/consola, que genera el UUID
+   offline correcto.
+
+2. **Registro AuthMe**: en su primer login el jugador tiene 60 s para
+   registrarse él mismo: `/register <contraseña> <contraseña>` (mínimo 8
+   caracteres). No hace falta nada del lado del operador. Reconexiones desde
+   la misma IP no piden `/login` durante 8 h (sesión).
+
+3. **El sermón — regla de hierro del nombre**: díselo SIEMPRE al nuevo:
+   *"Tu nombre es tu identidad. Si cambias el nombre en el launcher, para el
+   servidor eres otra persona: pierdes inventario, progreso, whitelist y
+   cuenta. No cambies de nombre, jamás."* (Motivo técnico en ADR-001.)
+
+## Restauración de backups
+
+Los backups los toma el servicio `backup` del compose (`infra/backup/`): dump de
+PostgreSQL cada hora en punto y mundo cada 6 h (a los :15), a un repositorio
+restic con retención de 30 días. Cada ejecución emite un evento `backup.done`
+a la API — **un `ok: false` o la ausencia del evento esperado es un incidente**.
+
+### Simulacro de restauración (drill)
+
+Con el entorno levantado:
+
+```
+docker exec mc-ecosystem-backup-1 /scripts/restore-drill.sh
+```
+
+El drill restaura el último snapshot de cada tag y verifica de verdad:
+- **db**: el dump carga en una base temporal (`restore_drill`) con `pg_restore`
+  y la tabla `events` responde a un `SELECT count(*)`.
+- **world**: el mundo restaurado contiene `world/level.dat` no vacío.
+
+Termina con `SIMULACRO OK` y exit code 0, o con los `[FAIL]` que encuentre y
+exit code 1. Limpia solo la base temporal y el directorio de restauración.
+
+### Regla: simulacro mensual obligatorio
+
+**El primer día de cada mes se ejecuta el drill y se anota aquí el resultado.**
+Un backup que nunca se ha restaurado no es un backup, es una esperanza. Si el
+drill falla, arreglarlo es la prioridad operativa número uno: no hay ninguna
+tarea del proyecto más importante que volver a tener backups restaurables.
+
+| Fecha | Resultado | Notas |
+|---|---|---|
+| 2026-07-16 | OK | Drill inicial: dump con 2371 eventos cargado; level.dat presente |
+
+### Restauración real (incidente)
+
+Mismos pasos que el drill pero sobre el destino real:
+
+1. `docker exec mc-ecosystem-backup-1 restic snapshots` — elegir snapshot
+   (por defecto `latest`; ante corrupción, el último snapshot sano).
+2. **DB**: restaurar el dump a un directorio temporal con
+   `restic restore <id> --tag db --target /tmp/r` y cargarlo con
+   `pg_restore -d mc_ecosystem --clean --if-exists <dump>` (o a una base
+   nueva y renombrar, que es más seguro).
+3. **Mundo**: parar el servidor (`docker compose -p mc-ecosystem stop
+   minecraft-staging`), restaurar con `restic restore <id> --tag world
+   --target /tmp/w`, reemplazar los directorios `world*` en
+   `infra/staging-data/` y volver a arrancar.
+4. Verificar: API `healthy`, el plugin conecta, y los eventos nuevos fluyen.
+
+### Pérdida máxima de datos (RPO, fase local)
+
+- **Historia (events)**: hasta **60 min** (backup horario) + lo que hubiera en
+  el búfer SQLite del plugin sin entregar.
+- **Mundo**: hasta **6 h** de terreno/construcciones.
+- **AVISO fase local**: el repositorio restic vive en el MISMO disco
+  (`infra/backup-repo/`). Protege contra borrados y corrupción lógica, pero
+  si el disco físico muere, se pierden datos Y backups. La migración a
+  Backblaze B2 (despliegue real) elimina este punto único de fallo.

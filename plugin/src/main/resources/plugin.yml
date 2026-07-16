@@ -1,7 +1,9 @@
 name: EventCollector
 version: '0.1.0'
 main: com.mcecosystem.eventcollector.EventCollectorPlugin
-api-version: '26.2'
+# 26.1: la mínima que soportamos (el staging corre 26.1.2 por CoreProtect);
+# válida también en servidores más nuevos.
+api-version: '26.1'
 description: Recolecta eventos del servidor y los envia a la API del ecosistema.
 author: miguel alvarez
 libraries:

@@ -3,10 +3,31 @@ services:
     image: itzg/minecraft-server
     environment:
       TYPE: "PAPER"
-      VERSION: "26.2"
+      # 26.1.2 (no 26.2): CoreProtect 24.0 tiene chequeo duro de versión y
+      # rechaza 26.2. Es además la versión de la suite de tests del plugin.
+      VERSION: "26.1.2"
       EULA: "TRUE"
       MEMORY: "4G"
-      ONLINE_MODE: "TRUE"
+      # ADR-001: modo offline. La identidad pasa a ser el NOMBRE (UUID offline
+      # derivado de él) y la autenticación la pone AuthMe. Whitelist SIEMPRE.
+      ONLINE_MODE: "FALSE"
+      ENABLE_WHITELIST: "TRUE"
+      ENFORCE_WHITELIST: "TRUE"
+      # SIN env WHITELIST: el sincronizador resuelve nombres contra Mojang
+      # (UUIDs premium), incompatible con modo offline. La whitelist vive en
+      # whitelist.json del volumen y se gestiona por rcon (ver runbook).
+      # Plugins gestionados por el propio contenedor (versionado = compose).
+      # URLs directas: Spiget no sirve a AuthMe (alojado fuera) y el filtro
+      # de Modrinth rechaza CoreProtect 24.0 para 26.2 (publica hasta 26.1.2,
+      # API-compatible, mismo caso que MockBukkit en el plugin).
+      PLUGINS: |
+        https://github.com/AuthMe/AuthMeReloaded/releases/download/6.0.0/AuthMe-6.0.0-Paper.jar
+        https://cdn.modrinth.com/data/Lu3KuzdV/versions/Kma0kBsY/CoreProtect-CE-24.0.jar
+      # Configs de plugins versionadas en infra/configs/, copiadas a /data.
+      COPY_CONFIG_DEST: "/data"
+      SYNC_SKIP_NEWER_IN_DESTINATION: "false"
+      # Password fija para que el servicio backup pueda hacer save-off/on.
+      RCON_PASSWORD: "${RCON_PASSWORD}"
       MOTD: "STAGING LOCAL - desechable"
       # La API vive en la misma red de compose: se resuelve por nombre de servicio.
       EVENTS_API_URL: "http://api:3000/events"
@@ -14,6 +35,7 @@ services:
       - "25565:25565"
     volumes:
       - ./staging-data:/data
+      - ./configs:/config:ro
     stdin_open: true
     tty: true
     restart: unless-stopped
