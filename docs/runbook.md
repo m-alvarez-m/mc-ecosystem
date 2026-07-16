@@ -30,6 +30,27 @@ alta a alguien hacen falta DOS pasos y UN sermón:
    servidor eres otra persona: pierdes inventario, progreso, whitelist y
    cuenta. No cambies de nombre, jamás."* (Motivo técnico en ADR-001.)
 
+## Skins en modo offline (SkinsRestorer)
+
+En modo offline Mojang no aplica skins: las gestiona SkinsRestorer. El
+procedimiento depende del tipo de cuenta del jugador:
+
+**Cuentas originales (premium):** no tienen que hacer nada — al entrar,
+SkinsRestorer resuelve la skin premium del MISMO nombre automáticamente.
+Si el jugador cambió su skin en minecraft.net y no se refleja, que ejecute
+`/skin update` (la caché de skins expira sola cada 15 min).
+
+**Cuentas no oficiales:** dos opciones en el juego:
+- `/skin set <usuario-premium>` — copia la skin pública de cualquier cuenta
+  original (ej. `/skin set Notch`).
+- `/skin url <enlace>` — usa una skin propia desde un PNG accesible por URL
+  (formato skin de Minecraft, 64x64). Pasa por el servicio MineSkin, y por
+  defecto esas skins aparecen en su galería pública — no subir nada privado.
+
+Otros útiles: `/skin clear` (volver a la skin por defecto), `/skins` (GUI
+con recomendadas), `/sr` (admin: aplicar skins a otros, p. ej.
+`/sr skin set <jugador> <skin>` desde consola).
+
 ## Restauración de backups
 
 Los backups los toma el servicio `backup` del compose (`infra/backup/`): dump de
