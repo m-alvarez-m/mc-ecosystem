@@ -1,0 +1,50 @@
+# CI del monorepo: cada push compila el plugin (con su suite de MockBukkit)
+# y la API. Cualquier fallo marca el commit en rojo en GitHub.
+name: CI
+
+on:
+  push:
+
+jobs:
+  plugin:
+    name: Plugin (gradlew build + tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugin
+    steps:
+      - uses: actions/checkout@v4
+
+      # El toolchain de Gradle exige Java 25 (Paper 26.2); Temurin, como en dev.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      # Cachea dependencias y el wrapper entre ejecuciones.
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build y tests
+        run: ./gradlew build
+
+  api:
+    name: API (npm ci + tsc)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
+      # ci (no install): respeta package-lock.json exacto o falla.
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar TypeScript
+        run: npm run build
