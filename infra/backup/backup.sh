@@ -65,6 +65,21 @@ else
     size_mb=0
 fi
 
+# Copia offsite (B2): el snapshot recién creado viaja a la nube. Si esta
+# pata falla, ok=false — un backup que no llegó al resguardo externo no
+# cuenta como éxito completo, aunque el local exista.
+if [ "$ok" = true ] && [ -n "${RESTIC_REPOSITORY_OFFSITE:-}" ]; then
+    if RESTIC_FROM_PASSWORD="$RESTIC_PASSWORD" restic -r "$RESTIC_REPOSITORY_OFFSITE" \
+            copy --quiet --from-repo "$RESTIC_REPOSITORY" --tag "$kind" latest; then
+        restic -r "$RESTIC_REPOSITORY_OFFSITE" forget --quiet --tag "$kind" \
+            --keep-within 30d --prune \
+            || echo "AVISO: la poda de retención en offsite falló" >&2
+    else
+        echo "ERROR: la copia offsite a $RESTIC_REPOSITORY_OFFSITE falló" >&2
+        ok=false
+    fi
+fi
+
 # backup.done según docs/event-catalog.md (evento de servidor: sin player).
 json=$(printf '{"event_uuid":"%s","type":"backup.done","v":1,"ts":"%s","data":{"kind":"%s","size_mb":%s,"ok":%s}}' \
     "$(uuidgen)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$kind" "$size_mb" "$ok")

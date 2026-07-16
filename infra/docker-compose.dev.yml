@@ -20,10 +20,13 @@ services:
   backup:
     build: ./backup
     environment:
-      # Fase local: repositorio restic en disco. Migración a Backblaze B2 en
-      # el despliegue real = cambiar RESTIC_REPOSITORY + credenciales B2.
+      # Dos líneas de defensa: repo local (rápido, primera línea) y B2
+      # (resguardo externo). Cada backup local se copia a B2 con restic copy.
       RESTIC_REPOSITORY: "/repo"
+      RESTIC_REPOSITORY_OFFSITE: "b2:mc-ecosystem-backups"
       RESTIC_PASSWORD: "${RESTIC_PASSWORD}"
+      B2_ACCOUNT_ID: "${B2_ACCOUNT_ID}"
+      B2_ACCOUNT_KEY: "${B2_ACCOUNT_KEY}"
       PGHOST: "postgres"
       PGUSER: "mc"
       PGPASSWORD: "${POSTGRES_PASSWORD}"

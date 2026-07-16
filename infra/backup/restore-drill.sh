@@ -1,8 +1,18 @@
 #!/bin/bash
-# restore-drill.sh — simulacro de restauración del ÚLTIMO backup.
+# restore-drill.sh [--offsite] — simulacro de restauración del ÚLTIMO backup.
 # No basta con que los snapshots existan: el dump tiene que CARGAR en un
 # PostgreSQL real y el mundo tiene que contener su level.dat.
+# --offsite: restaura desde el repositorio B2 en vez del local.
 set -uo pipefail
+
+if [ "${1:-}" = "--offsite" ]; then
+    if [ -z "${RESTIC_REPOSITORY_OFFSITE:-}" ]; then
+        echo "No hay RESTIC_REPOSITORY_OFFSITE configurado" >&2
+        exit 2
+    fi
+    export RESTIC_REPOSITORY="$RESTIC_REPOSITORY_OFFSITE"
+    echo "(drill contra el repositorio OFFSITE: $RESTIC_REPOSITORY)"
+fi
 
 tmp=$(mktemp -d /tmp/restore-drill.XXXXXX)
 drill_db=restore_drill

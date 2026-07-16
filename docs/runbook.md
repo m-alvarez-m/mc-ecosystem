@@ -101,12 +101,20 @@ Mismos pasos que el drill pero sobre el destino real:
    `infra/staging-data/` y volver a arrancar.
 4. Verificar: API `healthy`, el plugin conecta, y los eventos nuevos fluyen.
 
-### Pérdida máxima de datos (RPO, fase local)
+### Pérdida máxima de datos (RPO)
 
-- **Historia (events)**: hasta **60 min** (backup horario) + lo que hubiera en
-  el búfer SQLite del plugin sin entregar.
-- **Mundo**: hasta **6 h** de terreno/construcciones.
-- **AVISO fase local**: el repositorio restic vive en el MISMO disco
-  (`infra/backup-repo/`). Protege contra borrados y corrupción lógica, pero
-  si el disco físico muere, se pierden datos Y backups. La migración a
-  Backblaze B2 (despliegue real) elimina este punto único de fallo.
+Arquitectura de dos líneas: repo restic **local** (`infra/backup-repo/`,
+restauración rápida) + **offsite en Backblaze B2** (`b2:mc-ecosystem-backups`).
+Cada backup se copia a B2 inmediatamente después de crearse en local
+(`restic copy`); si la copia a la nube falla, el `backup.done` sale con
+`ok: false` — tratarlo como incidente.
+
+- **Desastre lógico** (borrado, corrupción, grief): restaurar del repo local.
+  RPO: hasta **60 min** de eventos (+ búfer SQLite sin entregar) y **6 h** de
+  mundo.
+- **Muerte física del disco**: restaurar desde B2. RPO: **el mismo — hasta
+  60 min de historia y 6 h de mundo** (lo que aún no viajaba en la copia
+  horaria/6-horaria más reciente). Ya NO es "todo": el punto único de fallo
+  se eliminó el 2026-07-16.
+- Drill contra la nube: `restore-drill.sh --offsite` (mismas verificaciones,
+  restaurando desde B2). Recomendado incluirlo en el simulacro mensual.
