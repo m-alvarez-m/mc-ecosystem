@@ -14,6 +14,30 @@ Para no depender de la memoria: en GitHub, entrar a
 llega notificación/correo con cada release nuevo (el detalle de versiones de
 MC soportadas se confirma en Modrinth).
 
+## Acceso público (túnel playit.gg)
+
+La dirección que usan los jugadores es:
+
+```
+work-framework.gl.joinmc.link
+```
+
+(sin puerto; usa el 25565 por defecto). Cómo funciona: el servicio `playit`
+del compose (`infra/docker-compose.staging.yml`) mantiene un túnel saliente
+hacia playit.gg — no hay puertos abiertos en el router. El secreto del agente
+vive en `infra/.env` (`PLAYIT_SECRET_KEY`); el túnel se administra en el
+dashboard de playit.gg (cuenta del admin) y su **Local Address debe ser
+`minecraft-staging:25565`** — NO `127.0.0.1`: el agente corre en su propio
+contenedor y localhost ahí no es el servidor (error clásico: "Connection
+refused" en los logs del agente con conexiones llegando).
+
+Verificado el 2026-07-17: conexión completa por el túnel, AuthMe rechazando
+contraseña incorrecta, y whitelist rebotando a un jugador no listado.
+
+**Ojo**: los OP están EXENTOS de la whitelist (comportamiento vanilla). Para
+probar el rebote de whitelist con un jugador que es OP hay que quitarle
+también el OP temporalmente.
+
 ## Alta de un jugador nuevo
 
 El servidor es offline-mode con whitelist + AuthMe (ver ADR-001). Para dar de

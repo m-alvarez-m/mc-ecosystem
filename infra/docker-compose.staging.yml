@@ -40,3 +40,16 @@ services:
     stdin_open: true
     tty: true
     restart: unless-stopped
+
+  # Túnel público de playit.gg: expone el servidor a internet sin abrir
+  # puertos en el router. El agente alcanza al servidor por la red interna
+  # (minecraft-staging:25565); el túnel se configura en el dashboard.
+  playit:
+    image: ghcr.io/playit-cloud/playit-agent:1.0.10
+    environment:
+      # Secreto del agente: se crea en el dashboard de playit.gg (Agents →
+      # New Agent → Docker) y vive en infra/.env como PLAYIT_SECRET_KEY.
+      SECRET_KEY: "${PLAYIT_SECRET_KEY}"
+    depends_on:
+      - minecraft-staging
+    restart: unless-stopped
