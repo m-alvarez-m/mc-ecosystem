@@ -2,6 +2,18 @@
 
 Procedimientos operativos para desplegar, monitorear y recuperar el sistema ante incidentes.
 
+## Tareas recurrentes
+
+| Frecuencia | Tarea | Cómo |
+|---|---|---|
+| **Semanal** (lunes) | Revisar si CoreProtect ya soporta la versión de MC a la que queremos subir (hoy: 26.2, ver ADR-002) | `https://modrinth.com/plugin/coreprotect/versions` (muestra las versiones de MC soportadas por cada release). Si ya está: probar la subida en staging según ADR-002 |
+| **Mensual** (día 1) | Simulacro de restauración, local Y offsite | `restore-drill.sh` y `restore-drill.sh --offsite`; anotar resultado en la tabla de la sección de restauración |
+
+Para no depender de la memoria: en GitHub, entrar a
+`https://github.com/PlayPro/CoreProtect` → Watch → Custom → **Releases** —
+llega notificación/correo con cada release nuevo (el detalle de versiones de
+MC soportadas se confirma en Modrinth).
+
 ## Alta de un jugador nuevo
 
 El servidor es offline-mode con whitelist + AuthMe (ver ADR-001). Para dar de
