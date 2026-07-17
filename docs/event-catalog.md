@@ -114,6 +114,17 @@ Convención de nombres: `dominio.accion`, en inglés, minúsculas. Campos comune
 | `server.tps_sample` | `{ "tps_1m": float, "mspt": float, "players_online": int, "ram_used_mb": int }` | Cada 60 s |
 | `backup.done` | `{ "kind": "world"\|"db", "size_mb": int, "ok": bool }` | |
 
+### Eventos de servidor — Modo Evento (player_uuid = NULL) · desde 2026-07-17
+| type | data | Notas |
+|---|---|---|
+| `event.start` | `{ "name": str, "kind": "torneo_ki", "participants": [uuid], "assignments": [{"player": uuid, "skin": str}] }` | Abre una ventana de Modo Evento. `assignments`: skin asignada a cada participante (via SkinsRestorer) |
+| `event.end` | `{ "name": str, "duration_s": int }` | Cierra la ventana abierta por el `event.start` del mismo `name` |
+
+> **Nota para Insight**: las ventanas entre `event.start` y `event.end` se
+> EXCLUIRÁN de las estadísticas normales (o se contarán como categoría
+> propia) cuando lleguen los workers de Insight. Lo que pasa en un torneo
+> (kills, muertes, daño) no debe contaminar rankings como Gladiador.
+
 ### Manuales (se crean desde la API/web, no desde el plugin)
 | type | data | Notas |
 |---|---|---|
@@ -129,4 +140,5 @@ Convención de nombres: `dominio.accion`, en inglés, minúsculas. Campos comune
 4. Cada cambio a este archivo = un commit propio con mensaje `catalog: ...`.
 
 ## Registro de cambios
+- **2026-07-17** · Nuevos tipos `event.start` y `event.end` (Modo Evento, v1). Las ventanas de evento se excluirán de las estadísticas normales o tendrán categoría propia en Insight.
 - **2026-07** · v1 inicial. Decisiones A (chat con contenido, consentimiento de todos), B (posición 60 s), C (daño por minuto).
