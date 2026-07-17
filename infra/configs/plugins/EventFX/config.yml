@@ -1,0 +1,27 @@
+# EventFX — config versionada (se sincroniza al staging en cada arranque).
+
+# Duración de los buffs y del evento, en segundos.
+duration_seconds: 300
+
+# Sonido del ¡PODER MÁXIMO! (id vanilla imponente por ahora).
+# Cuando exista el resource pack propio, reemplazar por su id custom,
+# p. ej. "mc-ecosystem:evento.poder_maximo".
+start_sound: "minecraft:entity.wither.spawn"
+
+# Sonido del EL PODER SE DESVANECE... (el beacon apagándose queda perfecto).
+end_sound: "minecraft:block.beacon.deactivate"
+
+# Pool de skins del evento (personajes de anime): URLs de textura oficiales.
+# Se asignan ALEATORIAS y DISTINTAS: debe haber al menos tantas entradas
+# como jugadores conectados al iniciar. La primera vez que se usa cada URL,
+# SkinsRestorer la genera vía MineSkin (tarda unos segundos); luego queda
+# cacheada.
+skin_pool:
+  - "http://textures.minecraft.net/texture/11f643eca64809a927d476812c0d8a9221a71de141b20d5999fc7797e0b659ed"
+  - "http://textures.minecraft.net/texture/fc745aff11af7f77c58ab12d07d415aa9c04041f632edf03275f19f48b64d4c4"
+  - "http://textures.minecraft.net/texture/2c7f5c019d62f1515b0ecc53a63acbc725199bdc4de93338a224249ffc0fc224"
+  - "http://textures.minecraft.net/texture/5278def844f507fcec2e530ea50cb69496a87dfe4f1b7c2a2fcff91894bcfced"
+  - "http://textures.minecraft.net/texture/43c9af51fe4e9a373f99a35d9b03e2e98cd9056fa6bfaa92e15c81a61ff32b98"
+  - "http://textures.minecraft.net/texture/4aeb083fd5c7b70244a30b7922b22aeadf24a4b60028f3341d7b5321d5e59b84"
+  - "http://textures.minecraft.net/texture/27d37d68b4841807402b3238107668523d47c626f3dd4ca42e7a5c1721758737"
+  - "http://textures.minecraft.net/texture/330d998e11b56ec74cd4a10b92b7ac12d9847616f0745dbd047ca48d0f55ac3f"

@@ -1,0 +1,18 @@
+name: EventFX
+version: '0.1.0'
+main: com.mcecosystem.eventfx.EventFXPlugin
+# 26.1: la mínima soportada por el ecosistema (ver ADR-002).
+api-version: '26.1'
+description: Modo evento - skins, secuencia dramatica y buffs. No captura datos.
+author: miguel alvarez
+depend:
+  - SkinsRestorer
+commands:
+  evento:
+    description: Controla el Modo Evento
+    usage: "/evento <iniciar <nombre>|terminar>"
+    permission: eventfx.admin
+permissions:
+  eventfx.admin:
+    description: Administrar el Modo Evento
+    default: op
