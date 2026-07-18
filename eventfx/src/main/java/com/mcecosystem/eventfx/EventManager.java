@@ -48,6 +48,7 @@ public final class EventManager {
 
     private StateStore.State active;
     private BukkitTask autoEndTask;
+    private BukkitTask feedTask;
 
     public EventManager(Plugin plugin, SkinService skins, EventOutput output,
                         StateStore stateStore, List<String> pool,
@@ -147,6 +148,7 @@ public final class EventManager {
                 for (PotionEffect effect : buffs()) {
                     p.addPotionEffect(effect);
                 }
+                feed(p);
                 p.showTitle(max);
                 try {
                     p.playSound(p.getLocation(), startSound, 1.0f, 1.0f);
@@ -156,6 +158,29 @@ public final class EventManager {
                 }
             }
         }, SEQUENCE_TICKS);
+
+        // Issue #1: sin comida no se puede correr y la Speed "no se siente".
+        // Refill periódico durante toda la ventana del evento.
+        feedTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+            synchronized (this) {
+                if (active == null) {
+                    return;
+                }
+                for (Assignment assignment : active.assignments()) {
+                    Player p = plugin.getServer()
+                            .getPlayer(UUID.fromString(assignment.player()));
+                    if (p != null) {
+                        feed(p);
+                    }
+                }
+            }
+        }, SEQUENCE_TICKS, 20L * 30);
+    }
+
+    /** Comida y saturación al máximo: un dios del ki no pasa hambre. */
+    private void feed(Player p) {
+        p.setFoodLevel(20);
+        p.setSaturation(20f);
     }
 
     private void titleAt(long ticks, List<Player> players, Component main, Component sub) {
@@ -192,6 +217,10 @@ public final class EventManager {
         if (autoEndTask != null) {
             autoEndTask.cancel();
             autoEndTask = null;
+        }
+        if (feedTask != null) {
+            feedTask.cancel();
+            feedTask = null;
         }
         long durationSecondsReal =
                 (System.currentTimeMillis() - ended.startedAtMillis()) / 1000;

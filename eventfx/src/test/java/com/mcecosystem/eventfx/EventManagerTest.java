@@ -60,6 +60,8 @@ class EventManagerTest {
         PlayerMock beto = server.addPlayer("Beto");
         // Ana tenía una skin custom; Beto no tenía override (premium pura).
         skins.preset(ana.getUniqueId(), "skin-original-de-ana");
+        // Issue #1: Ana llega con hambre (no podría correr).
+        ana.setFoodLevel(4);
 
         assertTrue(manager.start("torneo de prueba", server.getConsoleSender()));
         // Deja correr la secuencia dramática (5 s = 100 ticks).
@@ -74,6 +76,12 @@ class EventManagerTest {
         // Buffs aplicados tras el ¡PODER MÁXIMO!
         assertTrue(ana.hasPotionEffect(PotionEffectType.STRENGTH));
         assertTrue(beto.hasPotionEffect(PotionEffectType.HEALTH_BOOST));
+
+        // Issue #1: comida llena al iniciar, y refill durante el evento.
+        assertEquals(20, ana.getFoodLevel(), "la comida debe llenarse al iniciar");
+        ana.setFoodLevel(3);
+        server.getScheduler().performTicks(20 * 30 + 5);
+        assertEquals(20, ana.getFoodLevel(), "el refill periódico debe rellenar");
 
         // event.start con el data del catálogo.
         JsonObject start = output.single("event.start").getAsJsonObject("data");
@@ -103,6 +111,11 @@ class EventManagerTest {
         JsonObject end = output.single("event.end").getAsJsonObject("data");
         assertEquals("torneo de prueba", end.get("name").getAsString());
         assertTrue(end.get("duration_s").getAsLong() >= 0);
+
+        // Tras terminar, el refill de comida deja de actuar.
+        ana.setFoodLevel(5);
+        server.getScheduler().performTicks(20 * 60);
+        assertEquals(5, ana.getFoodLevel(), "sin evento no debe haber refill");
 
         // Y el manager queda libre para el siguiente evento.
         assertFalse(manager.isActive());
