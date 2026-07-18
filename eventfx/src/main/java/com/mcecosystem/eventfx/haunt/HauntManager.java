@@ -67,6 +67,11 @@ public final class HauntManager implements Listener {
             int soundMaxMinutes,
             double soundVolume,
             List<String> soundPool,
+            // La lluvia entierra pasos y susurros: pool y volumen alternos.
+            List<String> stormPool,
+            double stormVolumeMultiplier,
+            // Sonido al materializarse el fantasma ("" = aparición muda).
+            String appearanceSound,
             List<String> skinPool) {}
 
     /** Relojes y memoria por jugador. Solo viven mientras está online. */
@@ -293,16 +298,23 @@ public final class HauntManager implements Listener {
     // ---------- sonidos ambientales falsos ----------
 
     private void ambientSound(Player p) {
-        if (s.soundPool().isEmpty()) {
+        boolean storm = p.getWorld().hasStorm();
+        // En tormenta la lluvia entierra los sonidos sutiles: pool alterno
+        // (si existe) y volumen amplificado para atravesar el ruido.
+        List<String> pool = storm && !s.stormPool().isEmpty()
+                ? s.stormPool() : s.soundPool();
+        if (pool.isEmpty()) {
             return;
         }
-        String sound = s.soundPool().get(random.nextInt(s.soundPool().size()));
+        String sound = pool.get(random.nextInt(pool.size()));
+        float volume = (float) (storm
+                ? s.soundVolume() * s.stormVolumeMultiplier() : s.soundVolume());
         // Desde una dirección vacía: rumbo aleatorio a 8-15 bloques.
         double bearing = random.nextDouble() * 360;
         Location src = offset(p.getLocation(), bearing, 8 + random.nextDouble() * 7);
         try {
             p.playSound(src, sound, SoundCategory.AMBIENT,
-                    (float) s.soundVolume(), 0.9f + random.nextFloat() * 0.2f);
+                    volume, 0.9f + random.nextFloat() * 0.2f);
         } catch (Exception e) {
             plugin.getLogger().warning("Sonido de haunting no reproducible: " + sound);
             return;
@@ -456,6 +468,16 @@ public final class HauntManager implements Listener {
 
         ActiveGhost g = new ActiveGhost();
         g.entityId = presenter.showGhost(p, ground, yaw, pitch, skin);
+        if (!s.appearanceSound().isEmpty()) {
+            try {
+                // Desde la posición del fantasma: el susto tiene dirección.
+                p.playSound(ground, s.appearanceSound(),
+                        SoundCategory.AMBIENT, (float) s.soundVolume(), 1.0f);
+            } catch (Exception e) {
+                plugin.getLogger().warning("Sonido de aparición no reproducible: "
+                        + s.appearanceSound());
+            }
+        }
         g.loc = ground;
         g.skinEntry = currentSkinEntry();
         g.trigger = trigger;

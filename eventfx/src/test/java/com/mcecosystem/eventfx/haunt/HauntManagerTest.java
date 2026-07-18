@@ -80,6 +80,7 @@ class HauntManagerTest {
                 1, 0, 1, 15, 0, 35, 50, 15, 25, 40, 35,
                 1, 999, 0, 4, 1, 2,
                 1, 2, 0.4, List.of("minecraft:ambient.cave"),
+                List.of(), 1.8, "",
                 List.of("http://skin/herobrine"));
     }
 

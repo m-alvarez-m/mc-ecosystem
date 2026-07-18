@@ -1,34 +1,24 @@
-# EventFX — config versionada (se sincroniza al staging en cada arranque).
+# EventFX - config versionada (se sincroniza al staging en cada arranque).
+# Solo ASCII: los acentos ya nos costaron un YAML corrupto (0x81).
 
-# Duración de los buffs y del evento, en segundos.
+# Duracion de los buffs y del evento, en segundos.
 duration_seconds: 300
 
-# Sonido del ¡PODER MÁXIMO! (id vanilla imponente por ahora).
-# Cuando exista el resource pack propio, reemplazar por su id custom,
-# p. ej. "mc-ecosystem:evento.poder_maximo".
+# Sonido del PODER MAXIMO (id vanilla imponente por ahora).
 start_sound: "minecraft:entity.wither.spawn"
 
-# Sonido del EL PODER SE DESVANECE... (el beacon apagándose queda perfecto).
+# Sonido del EL PODER SE DESVANECE (beacon apagandose).
 end_sound: "minecraft:block.beacon.deactivate"
 
-# Banda sonora del evento: sonido del resource pack propio
-# (infra/resourcepack/). Suena en el canal MUSIC desde el ¡PODER MÁXIMO!
-# y se corta en seco al terminar. Vacío = sin música.
+# Banda sonora del evento (resource pack propio, infra/resourcepack/).
 music_sound: "mcecosystem:evento.musica"
-# Si la canción es más corta que el evento, relanzarla cada N segundos
-# (= duración de la canción). 0 = sonar una sola vez.
 music_loop_seconds: 0
 
-# Ráfagas automáticas durante el evento: mini-picos de poder para TODOS
-# los participantes, alternando velocidad ultra y salto celestial.
-# El salto SIEMPRE va con inmunidad total (Resistance V) más larga que el
-# salto: la caída continúa después de que el efecto expira.
-# Techos del motor: speed_level máx ~100; jump_level máx útil ~25 (más
-# alto rompe la física del salto y no despegas).
+# Rafagas automaticas del evento: velocidad ultra y salto celestial
+# (el salto SIEMPRE con inmunidad mas larga que el vuelo).
+# Techos del motor: speed ~100; jump ~25 (mas alto y no despegas).
 bursts:
   enabled: true
-  # Cinco picos durante 300 s: 55, 105, 155, 205 y 255 s desde el comando.
-  # Evita una sexta rafaga justo al cerrar el evento.
   max_count: 5
   interval_seconds: 50
   speed_level: 100
@@ -37,11 +27,14 @@ bursts:
   jump_seconds: 10
   immunity_seconds: 60
 
-# Haunting: apariciones fantasma y sonidos falsos SOLO para jugadores en
-# soledad. Se controla con /haunt on|off (persistente entre reinicios).
-# Los relojes solo corren en soledad elegible; la compañía los pausa.
+# Haunting: apariciones y sonidos falsos SOLO para jugadores en soledad.
+# /haunt on|off (persistente). La compania y las reglas de no-crueldad
+# PAUSAN los relojes, no los resetean.
+# REGLA DE ORO: los rangos de spawn deben ser SIEMPRE mayores que
+# close_despawn_distance (aprendido en vivo: nacer dentro del radio de
+# huida = duracion 0).
 haunting:
-  # Jugadores que JAMÁS reciben sustos (el titiritero, streamers, etc.)
+  # Jugadores que JAMAS reciben sustos (el titiritero, streamers, etc.)
   exempt:
     - Vancorbus
   solitude_radius: 40
@@ -57,13 +50,17 @@ haunting:
     duration_seconds: 6
     close_despawn_distance: 15
     center_grace_seconds: 2
-    # De día se ve de lejos; de noche (o tormenta) se acerca.
+    # De dia se ve de lejos; de noche (o tormenta) se acerca.
     day_min_distance: 35
     day_max_distance: 50
     night_min_distance: 15
     night_max_distance: 25
     min_angle_separation: 40
     view_cone_degrees: 35
+    # Sonido al materializarse, desde la posicion del fantasma ("" = mudo).
+    # PENDIENTE: id del resource pack cuando llegue el audio del usuario
+    # (sera mcecosystem:haunt.cue).
+    sound: ""
   turnaround:
     max_per_night: 1
     interval_minutes: 90
@@ -80,16 +77,17 @@ haunting:
       - "minecraft:entity.zombie.ambient"
       - "minecraft:block.gravel.step"
       - "minecraft:block.stone.step"
-  # Pool de skins del fantasma (URL de textura o nombre premium).
-  # PENDIENTE: reemplazar por la URL real de la skin de Herobrine.
+    # En tormenta la lluvia entierra los pasos: pool alterno sin pasos y
+    # volumen amplificado.
+    storm_pool:
+      - "minecraft:ambient.cave"
+      - "minecraft:entity.zombie.ambient"
+    storm_volume_multiplier: 1.8
   skin_pool:
-    - "PENDIENTE-URL-HEROBRINE"
+    - "https://s.namemc.com/i/650ce4b9af830e29.png"
 
-# Pool de skins del evento (personajes de anime): URLs de textura oficiales.
-# Se asignan ALEATORIAS y DISTINTAS: debe haber al menos tantas entradas
-# como jugadores conectados al iniciar. La primera vez que se usa cada URL,
-# SkinsRestorer la genera vía MineSkin (tarda unos segundos); luego queda
-# cacheada.
+# Pool de skins del Modo Evento (anime): URLs de textura oficiales.
+# Aleatorias y DISTINTAS: minimo tantas entradas como jugadores online.
 skin_pool:
   - "http://textures.minecraft.net/texture/11f643eca64809a927d476812c0d8a9221a71de141b20d5999fc7797e0b659ed"
   - "http://textures.minecraft.net/texture/fc745aff11af7f77c58ab12d07d415aa9c04041f632edf03275f19f48b64d4c4"
