@@ -19,6 +19,24 @@ music_sound: "mcecosystem:evento.musica"
 # (= duración de la canción). 0 = sonar una sola vez.
 music_loop_seconds: 0
 
+# Ráfagas automáticas durante el evento: mini-picos de poder para TODOS
+# los participantes, alternando velocidad ultra y salto celestial.
+# El salto SIEMPRE va con inmunidad total (Resistance V) más larga que el
+# salto: la caída continúa después de que el efecto expira.
+# Techos del motor: speed_level máx ~100; jump_level máx útil ~25 (más
+# alto rompe la física del salto y no despegas).
+bursts:
+  enabled: true
+  # Cinco picos durante 300 s: 55, 105, 155, 205 y 255 s desde el comando.
+  # Evita una sexta rafaga justo al cerrar el evento.
+  max_count: 5
+  interval_seconds: 50
+  speed_level: 100
+  speed_seconds: 12
+  jump_level: 25
+  jump_seconds: 10
+  immunity_seconds: 60
+
 # Pool de skins del evento (personajes de anime): URLs de textura oficiales.
 # Se asignan ALEATORIAS y DISTINTAS: debe haber al menos tantas entradas
 # como jugadores conectados al iniciar. La primera vez que se usa cada URL,

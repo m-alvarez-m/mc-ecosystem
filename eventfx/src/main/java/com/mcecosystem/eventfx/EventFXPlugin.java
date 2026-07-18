@@ -13,12 +13,21 @@ public final class EventFXPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        List<String> pool = getConfig().getStringList("skin_pool");
-        int duration = getConfig().getInt("duration_seconds", 300);
-        String sound = getConfig().getString("start_sound", "minecraft:entity.wither.spawn");
-        String endSound = getConfig().getString("end_sound", "minecraft:block.beacon.deactivate");
-        String musicSound = getConfig().getString("music_sound", "");
-        int musicLoop = getConfig().getInt("music_loop_seconds", 0);
+        EventManager.Settings settings = new EventManager.Settings(
+                getConfig().getStringList("skin_pool"),
+                getConfig().getInt("duration_seconds", 300),
+                getConfig().getString("start_sound", "minecraft:entity.wither.spawn"),
+                getConfig().getString("end_sound", "minecraft:block.beacon.deactivate"),
+                getConfig().getString("music_sound", ""),
+                getConfig().getInt("music_loop_seconds", 0),
+                getConfig().getBoolean("bursts.enabled", true),
+                getConfig().getInt("bursts.interval_seconds", 50),
+                getConfig().getInt("bursts.max_count", 5),
+                getConfig().getInt("bursts.speed_level", 100),
+                getConfig().getInt("bursts.speed_seconds", 12),
+                getConfig().getInt("bursts.jump_level", 25),
+                getConfig().getInt("bursts.jump_seconds", 10),
+                getConfig().getInt("bursts.immunity_seconds", 60));
 
         // Mismo contrato que EventCollector: en Docker se inyecta EVENTS_API_URL.
         String apiUrl = System.getenv().getOrDefault("EVENTS_API_URL",
@@ -29,7 +38,7 @@ public final class EventFXPlugin extends JavaPlugin {
                 new SkinsRestorerSkinService(SkinsRestorerProvider.get(), getLogger()),
                 new HttpEventOutput(apiUrl, getLogger()),
                 new StateStore(getDataFolder(), getLogger()),
-                pool, duration, sound, endSound, musicSound, musicLoop,
+                settings,
                 task -> getServer().getScheduler().runTaskAsynchronously(this, task));
 
         PluginCommand command = getCommand("evento");
@@ -40,8 +49,11 @@ public final class EventFXPlugin extends JavaPlugin {
         // Si un reinicio interrumpió un evento, restaurar y cerrar.
         manager.recoverIfPending();
 
-        getLogger().info("EventFX activo. Pool de skins: " + pool.size()
-                + " | duración: " + duration + "s | endpoint: " + apiUrl);
+        getLogger().info("EventFX activo. Pool de skins: " + settings.skinPool().size()
+                + " | duración: " + settings.durationSeconds() + "s"
+                + " | ráfagas: " + (settings.burstsEnabled()
+                        ? "cada " + settings.burstIntervalSeconds() + "s" : "off")
+                + " | endpoint: " + apiUrl);
     }
 
     @Override

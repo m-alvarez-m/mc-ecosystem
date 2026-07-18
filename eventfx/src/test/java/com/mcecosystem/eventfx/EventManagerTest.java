@@ -45,9 +45,12 @@ class EventManagerTest {
         // Executor inline: la fase async corre determinista en el test.
         manager = new EventManager(plugin, skins, output,
                 new StateStore(tempDir, Logger.getLogger("test")),
-                POOL, 300, "minecraft:entity.wither.spawn",
-                "minecraft:block.beacon.deactivate",
-                "mcecosystem:evento.musica", 0, Runnable::run);
+                new EventManager.Settings(POOL, 300,
+                        "minecraft:entity.wither.spawn",
+                        "minecraft:block.beacon.deactivate",
+                        "mcecosystem:evento.musica", 0,
+                        true, 50, 5, 100, 12, 25, 10, 60),
+                Runnable::run);
     }
 
     @AfterEach
@@ -83,6 +86,19 @@ class EventManagerTest {
         ana.setFoodLevel(3);
         server.getScheduler().performTicks(20 * 30 + 5);
         assertEquals(20, ana.getFoodLevel(), "el refill periódico debe rellenar");
+
+        // Ráfagas (cada 50 s desde el PODER MÁXIMO): hay que mirar mientras
+        // la ráfaga sigue viva (la de velocidad dura solo 12 s).
+        // Vamos en el tick ~715; la primera cae en el 1100.
+        server.getScheduler().performTicks(1100 - 715 + 5);
+        assertEquals(99, ana.getPotionEffect(PotionEffectType.SPEED).getAmplifier(),
+                "la primera ráfaga es velocidad ultra (amplifier 99)");
+        // La segunda cae en el tick 2100: SALTO CELESTIAL (salto + inmunidad).
+        server.getScheduler().performTicks(1000);
+        assertEquals(24, ana.getPotionEffect(PotionEffectType.JUMP_BOOST).getAmplifier(),
+                "la segunda ráfaga es salto celestial (amplifier 24)");
+        assertEquals(4, ana.getPotionEffect(PotionEffectType.RESISTANCE).getAmplifier(),
+                "el salto SIEMPRE llega con inmunidad de aterrizaje (Resistance V)");
 
         // event.start con el data del catálogo.
         JsonObject start = output.single("event.start").getAsJsonObject("data");
