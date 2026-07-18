@@ -17,6 +17,8 @@ public final class EventFXPlugin extends JavaPlugin {
         int duration = getConfig().getInt("duration_seconds", 300);
         String sound = getConfig().getString("start_sound", "minecraft:entity.wither.spawn");
         String endSound = getConfig().getString("end_sound", "minecraft:block.beacon.deactivate");
+        String musicSound = getConfig().getString("music_sound", "");
+        int musicLoop = getConfig().getInt("music_loop_seconds", 0);
 
         // Mismo contrato que EventCollector: en Docker se inyecta EVENTS_API_URL.
         String apiUrl = System.getenv().getOrDefault("EVENTS_API_URL",
@@ -27,7 +29,7 @@ public final class EventFXPlugin extends JavaPlugin {
                 new SkinsRestorerSkinService(SkinsRestorerProvider.get(), getLogger()),
                 new HttpEventOutput(apiUrl, getLogger()),
                 new StateStore(getDataFolder(), getLogger()),
-                pool, duration, sound, endSound,
+                pool, duration, sound, endSound, musicSound, musicLoop,
                 task -> getServer().getScheduler().runTaskAsynchronously(this, task));
 
         PluginCommand command = getCommand("evento");

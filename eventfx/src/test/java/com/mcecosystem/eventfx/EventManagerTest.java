@@ -46,7 +46,8 @@ class EventManagerTest {
         manager = new EventManager(plugin, skins, output,
                 new StateStore(tempDir, Logger.getLogger("test")),
                 POOL, 300, "minecraft:entity.wither.spawn",
-                "minecraft:block.beacon.deactivate", Runnable::run);
+                "minecraft:block.beacon.deactivate",
+                "mcecosystem:evento.musica", 0, Runnable::run);
     }
 
     @AfterEach

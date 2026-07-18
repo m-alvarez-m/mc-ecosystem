@@ -1,0 +1,8 @@
+{
+  "evento.musica": {
+    "category": "music",
+    "sounds": [
+      { "name": "mcecosystem:evento/musica", "stream": true }
+    ]
+  }
+}

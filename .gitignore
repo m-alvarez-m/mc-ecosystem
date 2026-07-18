@@ -8,4 +8,6 @@ build/
 staging-data/
 pg-data/
 backup-repo/
+# Artefacto generado por infra/resourcepack/build-pack.ps1 (el .ogg sí se versiona).
+pack.zip
 .gradle/

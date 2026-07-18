@@ -5,6 +5,9 @@ services:
       # La API SIEMPRE como mc_app (append-only); "postgres" es el
       # nombre del servicio vecino en la red interna de compose.
       DATABASE_URL: "postgresql://mc_app:${MC_APP_PASSWORD}@postgres:5432/mc_ecosystem"
+    volumes:
+      # Resource pack del Modo Evento, servido en GET /pack.zip.
+      - ./resourcepack:/app/resourcepack:ro
     ports:
       - "3000:3000"
     depends_on:

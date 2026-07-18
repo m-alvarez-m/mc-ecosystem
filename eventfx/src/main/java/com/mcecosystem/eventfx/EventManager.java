@@ -42,6 +42,8 @@ public final class EventManager {
     private final int durationSeconds;
     private final String startSound;
     private final String endSound;
+    private final String musicSound;      // vacío = sin música
+    private final int musicLoopSeconds;   // 0 = no repetir
     // Inyectado para que los tests corran la fase de skins de forma
     // determinista (en producción: scheduler async de Bukkit).
     private final java.util.concurrent.Executor asyncExecutor;
@@ -49,10 +51,12 @@ public final class EventManager {
     private StateStore.State active;
     private BukkitTask autoEndTask;
     private BukkitTask feedTask;
+    private BukkitTask musicTask;
 
     public EventManager(Plugin plugin, SkinService skins, EventOutput output,
                         StateStore stateStore, List<String> pool,
                         int durationSeconds, String startSound, String endSound,
+                        String musicSound, int musicLoopSeconds,
                         java.util.concurrent.Executor asyncExecutor) {
         this.plugin = plugin;
         this.skins = skins;
@@ -62,6 +66,8 @@ public final class EventManager {
         this.durationSeconds = durationSeconds;
         this.startSound = startSound;
         this.endSound = endSound;
+        this.musicSound = musicSound;
+        this.musicLoopSeconds = musicLoopSeconds;
         this.asyncExecutor = asyncExecutor;
     }
 
@@ -156,8 +162,29 @@ public final class EventManager {
                     plugin.getLogger().warning("Sonido '" + startSound
                             + "' no reproducible: " + e.getMessage());
                 }
+                playMusic(p);
             }
         }, SEQUENCE_TICKS);
+
+        // Loop de música: si la canción es más corta que el evento, se
+        // relanza cada music_loop_seconds para los que siguen conectados.
+        if (!musicSound.isEmpty() && musicLoopSeconds > 0) {
+            long loopTicks = musicLoopSeconds * 20L;
+            musicTask = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
+                synchronized (this) {
+                    if (active == null) {
+                        return;
+                    }
+                    for (Assignment assignment : active.assignments()) {
+                        Player p = plugin.getServer()
+                                .getPlayer(UUID.fromString(assignment.player()));
+                        if (p != null) {
+                            playMusic(p);
+                        }
+                    }
+                }
+            }, SEQUENCE_TICKS + loopTicks, loopTicks);
+        }
 
         // Issue #1: sin comida no se puede correr y la Speed "no se siente".
         // Refill periódico durante toda la ventana del evento.
@@ -183,6 +210,36 @@ public final class EventManager {
         p.setSaturation(20f);
     }
 
+    /** Banda sonora del evento (resource pack); canal MUSIC para que el
+     *  volumen lo controle el slider de música del cliente. */
+    private void playMusic(Player p) {
+        if (musicSound.isEmpty()) {
+            return;
+        }
+        try {
+            // Silencia la música vanilla que estuviera sonando: el evento
+            // tiene UNA banda sonora, sin C418 de fondo compitiendo.
+            p.stopSound(org.bukkit.SoundCategory.MUSIC);
+            p.playSound(p.getLocation(), musicSound,
+                    org.bukkit.SoundCategory.MUSIC, 1.0f, 1.0f);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Música '" + musicSound
+                    + "' no reproducible: " + e.getMessage());
+        }
+    }
+
+    private void stopMusic(Player p) {
+        if (musicSound.isEmpty()) {
+            return;
+        }
+        try {
+            p.stopSound(musicSound, org.bukkit.SoundCategory.MUSIC);
+        } catch (Exception e) {
+            plugin.getLogger().warning("No se pudo detener la música para "
+                    + p.getName() + ": " + e.getMessage());
+        }
+    }
+
     private void titleAt(long ticks, List<Player> players, Component main, Component sub) {
         Title title = Title.title(main, sub, Title.Times.times(
                 Duration.ofMillis(150), Duration.ofMillis(900), Duration.ofMillis(150)));
@@ -197,7 +254,7 @@ public final class EventManager {
     private List<PotionEffect> buffs() {
         int ticks = durationSeconds * 20;
         return List.of(
-                new PotionEffect(PotionEffectType.SPEED, ticks, 1),        // II
+                new PotionEffect(PotionEffectType.SPEED, ticks, 3),        // IV
                 new PotionEffect(PotionEffectType.STRENGTH, ticks, 1),     // II
                 new PotionEffect(PotionEffectType.JUMP_BOOST, ticks, 2),   // III
                 new PotionEffect(PotionEffectType.HEALTH_BOOST, ticks, 3), // IV
@@ -222,6 +279,10 @@ public final class EventManager {
             feedTask.cancel();
             feedTask = null;
         }
+        if (musicTask != null) {
+            musicTask.cancel();
+            musicTask = null;
+        }
         long durationSecondsReal =
                 (System.currentTimeMillis() - ended.startedAtMillis()) / 1000;
 
@@ -237,6 +298,7 @@ public final class EventManager {
                 for (PotionEffect effect : buffs()) {
                     p.removePotionEffect(effect.getType());
                 }
+                stopMusic(p); // corte en seco: el silencio es parte del drama
                 try {
                     p.playSound(p.getLocation(), endSound, 1.0f, 1.0f);
                 } catch (Exception e) {

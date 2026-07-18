@@ -29,6 +29,11 @@ services:
       SYNC_SKIP_NEWER_IN_DESTINATION: "false"
       # Password fija para que el servicio backup pueda hacer save-off/on.
       RCON_PASSWORD: "${RCON_PASSWORD}"
+      # Resource pack del Modo Evento: URL desde la que los CLIENTES lo
+      # descargan (localhost:3000 solo sirve en esta máquina; para amigos
+      # por túnel hará falta exponer la API con un segundo túnel).
+      RESOURCE_PACK: "${RESOURCE_PACK_URL:-}"
+      RESOURCE_PACK_SHA1: "${RESOURCE_PACK_SHA1:-}"
       MOTD: "STAGING LOCAL - desechable"
       # La API vive en la misma red de compose: se resuelve por nombre de servicio.
       EVENTS_API_URL: "http://api:3000/events"

@@ -11,6 +11,14 @@ start_sound: "minecraft:entity.wither.spawn"
 # Sonido del EL PODER SE DESVANECE... (el beacon apagándose queda perfecto).
 end_sound: "minecraft:block.beacon.deactivate"
 
+# Banda sonora del evento: sonido del resource pack propio
+# (infra/resourcepack/). Suena en el canal MUSIC desde el ¡PODER MÁXIMO!
+# y se corta en seco al terminar. Vacío = sin música.
+music_sound: "mcecosystem:evento.musica"
+# Si la canción es más corta que el evento, relanzarla cada N segundos
+# (= duración de la canción). 0 = sonar una sola vez.
+music_loop_seconds: 0
+
 # Pool de skins del evento (personajes de anime): URLs de textura oficiales.
 # Se asignan ALEATORIAS y DISTINTAS: debe haber al menos tantas entradas
 # como jugadores conectados al iniciar. La primera vez que se usa cada URL,
