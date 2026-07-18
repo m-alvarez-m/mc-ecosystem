@@ -128,7 +128,7 @@ Convención de nombres: `dominio.accion`, en inglés, minúsculas. Campos comune
 ### Modo Evento — Haunting (player_uuid = NULL) · desde 2026-07-18
 | type | data | Notas |
 |---|---|---|
-| `haunt.appearance` | `{ "target": uuid, "skin": str, "distance": float, "duration_s": float, "seen": bool }` | Aparición fantasma visible SOLO para `target`. pos = dónde estuvo el NPC. `seen`: si el objetivo llegó a tenerlo en su cono de visión |
+| `haunt.appearance` | `{ "target": uuid, "skin": str, "distance": float, "duration_s": float, "seen": bool, "trigger": "ambient"\|"turnaround", "time_of_day": "day"\|"night"\|"storm" }` | Aparición fantasma visible SOLO para `target`. pos = dónde estuvo el NPC. `seen`: si el objetivo lo tuvo en su cono de visión. `turnaround`: apareció porque volteó hacia un sonido |
 | `haunt.sound` | `{ "target": uuid, "sound": str }` | Sonido ambiental falso reproducido solo para `target`. pos = origen aparente del sonido |
 
 > Ambos se emiten al ocurrir, nunca se anuncian al jugador. La gracia del
@@ -149,6 +149,6 @@ Convención de nombres: `dominio.accion`, en inglés, minúsculas. Campos comune
 4. Cada cambio a este archivo = un commit propio con mensaje `catalog: ...`.
 
 ## Registro de cambios
-- **2026-07-18** · Nuevos tipos `haunt.appearance` y `haunt.sound` (Modo Evento — Haunting, v1).
+- **2026-07-18** · Nuevos tipos `haunt.appearance` y `haunt.sound` (Modo Evento — Haunting, v1). Mismo día y sin emisor aún, se amplió v1 en sitio con `trigger` y `time_of_day`.
 - **2026-07-17** · Nuevos tipos `event.start` y `event.end` (Modo Evento, v1). Las ventanas de evento se excluirán de las estadísticas normales o tendrán categoría propia en Insight.
 - **2026-07** · v1 inicial. Decisiones A (chat con contenido, consentimiento de todos), B (posición 60 s), C (daño por minuto).
