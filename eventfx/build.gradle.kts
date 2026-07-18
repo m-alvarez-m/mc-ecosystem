@@ -19,6 +19,8 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.1.2.build.74-stable")
     // La aporta el plugin SkinsRestorer en runtime (depend en plugin.yml).
     compileOnly("net.skinsrestorer:skinsrestorer-api:15.12.4")
+    // La aporta el plugin packetevents en runtime (depend en plugin.yml).
+    compileOnly("com.github.retrooper:packetevents-spigot:2.13.0")
     // gson lo aporta el servidor en runtime.
     compileOnly("com.google.code.gson:gson:2.11.0")
 

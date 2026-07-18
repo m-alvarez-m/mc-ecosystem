@@ -37,6 +37,54 @@ bursts:
   jump_seconds: 10
   immunity_seconds: 60
 
+# Haunting: apariciones fantasma y sonidos falsos SOLO para jugadores en
+# soledad. Se controla con /haunt on|off (persistente entre reinicios).
+# Los relojes solo corren en soledad elegible; la compañía los pausa.
+haunting:
+  # Jugadores que JAMÁS reciben sustos (el titiritero, streamers, etc.)
+  exempt:
+    - Vancorbus
+  solitude_radius: 40
+  # Reglas de no-crueldad.
+  min_session_minutes: 10
+  death_grace_minutes: 20
+  combat_grace_seconds: 15
+  min_health_hearts: 6
+  max_per_session: 2
+  appearance:
+    interval_minutes: 120
+    jitter_minutes: 30
+    duration_seconds: 6
+    close_despawn_distance: 15
+    center_grace_seconds: 2
+    # De día se ve de lejos; de noche (o tormenta) se acerca.
+    day_min_distance: 35
+    day_max_distance: 50
+    night_min_distance: 15
+    night_max_distance: 25
+    min_angle_separation: 40
+    view_cone_degrees: 35
+  turnaround:
+    max_per_night: 1
+    interval_minutes: 90
+    jitter_minutes: 40
+    turn_window_seconds: 4
+    duration_min_seconds: 1
+    duration_max_seconds: 2
+  sounds:
+    interval_min_minutes: 20
+    interval_max_minutes: 40
+    volume: 0.4
+    pool:
+      - "minecraft:ambient.cave"
+      - "minecraft:entity.zombie.ambient"
+      - "minecraft:block.gravel.step"
+      - "minecraft:block.stone.step"
+  # Pool de skins del fantasma (URL de textura o nombre premium).
+  # PENDIENTE: reemplazar por la URL real de la skin de Herobrine.
+  skin_pool:
+    - "PENDIENTE-URL-HEROBRINE"
+
 # Pool de skins del evento (personajes de anime): URLs de textura oficiales.
 # Se asignan ALEATORIAS y DISTINTAS: debe haber al menos tantas entradas
 # como jugadores conectados al iniciar. La primera vez que se usa cada URL,

@@ -7,10 +7,15 @@ description: Modo evento - skins, secuencia dramatica y buffs. No captura datos.
 author: miguel alvarez
 depend:
   - SkinsRestorer
+  - packetevents
 commands:
   evento:
     description: Controla el Modo Evento
     usage: "/evento <iniciar <nombre>|terminar>"
+    permission: eventfx.admin
+  haunt:
+    description: Controla el modo Haunting
+    usage: "/haunt <on|off|status>"
     permission: eventfx.admin
 permissions:
   eventfx.admin:

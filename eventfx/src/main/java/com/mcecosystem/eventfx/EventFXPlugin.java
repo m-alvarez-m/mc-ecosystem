@@ -46,6 +46,54 @@ public final class EventFXPlugin extends JavaPlugin {
         command.setExecutor(executor);
         command.setTabCompleter(executor);
 
+        // ---------- Haunting ----------
+        var hauntSettings = new com.mcecosystem.eventfx.haunt.HauntManager.Settings(
+                getConfig().getStringList("haunting.exempt"),
+                getConfig().getInt("haunting.solitude_radius", 40),
+                getConfig().getInt("haunting.min_session_minutes", 10),
+                getConfig().getInt("haunting.death_grace_minutes", 20),
+                getConfig().getInt("haunting.combat_grace_seconds", 15),
+                getConfig().getDouble("haunting.min_health_hearts", 6),
+                getConfig().getInt("haunting.max_per_session", 2),
+                getConfig().getInt("haunting.appearance.interval_minutes", 120),
+                getConfig().getInt("haunting.appearance.jitter_minutes", 30),
+                getConfig().getInt("haunting.appearance.duration_seconds", 6),
+                getConfig().getInt("haunting.appearance.close_despawn_distance", 15),
+                getConfig().getInt("haunting.appearance.center_grace_seconds", 2),
+                getConfig().getInt("haunting.appearance.day_min_distance", 35),
+                getConfig().getInt("haunting.appearance.day_max_distance", 50),
+                getConfig().getInt("haunting.appearance.night_min_distance", 15),
+                getConfig().getInt("haunting.appearance.night_max_distance", 25),
+                getConfig().getInt("haunting.appearance.min_angle_separation", 40),
+                getConfig().getInt("haunting.appearance.view_cone_degrees", 35),
+                getConfig().getInt("haunting.turnaround.max_per_night", 1),
+                getConfig().getInt("haunting.turnaround.interval_minutes", 90),
+                getConfig().getInt("haunting.turnaround.jitter_minutes", 40),
+                getConfig().getInt("haunting.turnaround.turn_window_seconds", 4),
+                getConfig().getInt("haunting.turnaround.duration_min_seconds", 1),
+                getConfig().getInt("haunting.turnaround.duration_max_seconds", 2),
+                getConfig().getInt("haunting.sounds.interval_min_minutes", 20),
+                getConfig().getInt("haunting.sounds.interval_max_minutes", 40),
+                getConfig().getDouble("haunting.sounds.volume", 0.4),
+                getConfig().getStringList("haunting.sounds.pool"),
+                getConfig().getStringList("haunting.skin_pool"));
+        var hauntManager = new com.mcecosystem.eventfx.haunt.HauntManager(
+                this,
+                new com.mcecosystem.eventfx.haunt.PacketGhostPresenter(this),
+                new com.mcecosystem.eventfx.haunt.SkinsRestorerGhostSkinResolver(
+                        SkinsRestorerProvider.get(), getLogger()),
+                new HttpEventOutput(apiUrl, getLogger()),
+                hauntSettings,
+                () -> manager.isActive(),
+                new java.util.Random());
+        hauntManager.startTasks();
+        var hauntCommand = new com.mcecosystem.eventfx.haunt.HauntCommand(hauntManager);
+        PluginCommand haunt = getCommand("haunt");
+        haunt.setExecutor(hauntCommand);
+        haunt.setTabCompleter(hauntCommand);
+        getLogger().info("Haunting: " + (hauntManager.isEnabled() ? "ACTIVO" : "apagado")
+                + " (persistente; /haunt on|off)");
+
         // Si un reinicio interrumpió un evento, restaurar y cerrar.
         manager.recoverIfPending();
 

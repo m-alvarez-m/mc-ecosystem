@@ -7,11 +7,11 @@ import java.util.UUID;
 
 /** Esqueleto común del catálogo. Los eventos de EventFX son de servidor
  *  (player_uuid = NULL), así que aquí no hay jugador. */
-final class EventJson {
+public final class EventJson {
 
     private EventJson() {}
 
-    static JsonObject base(String type) {
+    public static JsonObject base(String type) {
         JsonObject json = new JsonObject();
         json.addProperty("event_uuid", UUID.randomUUID().toString());
         json.addProperty("type", type);
@@ -20,7 +20,14 @@ final class EventJson {
         return json;
     }
 
-    static String eventUuid(JsonObject json) {
+    public static String eventUuid(JsonObject json) {
         return json.get("event_uuid").getAsString();
+    }
+
+    public static void position(JsonObject json, org.bukkit.Location loc) {
+        json.addProperty("world", loc.getWorld().getName());
+        json.addProperty("x", loc.getBlockX());
+        json.addProperty("y", loc.getBlockY());
+        json.addProperty("z", loc.getBlockZ());
     }
 }
