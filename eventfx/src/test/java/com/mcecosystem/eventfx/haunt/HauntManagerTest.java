@@ -80,7 +80,7 @@ class HauntManagerTest {
                 1, 0, 1, 15, 0, 35, 50, 15, 25, 40, 35,
                 1, 999, 0, 4, 1, 2,
                 1, 2, 0.4, List.of("minecraft:ambient.cave"),
-                List.of(), 1.8, "",
+                List.of(), 1.8, "", 1.4, "", 1.0, 1.0,
                 List.of("http://skin/herobrine"));
     }
 
@@ -136,7 +136,7 @@ class HauntManagerTest {
                 35, 50, 10, 25, 40, 35,
                 1, 90, 40, 4, 1, 2,
                 20, 40, 0.4, List.of("minecraft:ambient.cave"),
-                List.of(), 1.8, "",
+                List.of(), 1.8, "", 1.4, "", 1.0, 1.0,
                 List.of("http://skin/herobrine"));
         assertTrue(HauntManager.validate(bad).stream()
                         .anyMatch(m -> m.contains("night_min_distance")),
@@ -152,7 +152,7 @@ class HauntManagerTest {
                 35, 50, 25, 15, 40, 35,
                 1, 90, 40, 4, 1, 2,
                 20, 40, 0.4, List.of("minecraft:ambient.cave"),
-                List.of(), 1.8, "",
+                List.of(), 1.8, "", 1.4, "", 1.0, 1.0,
                 List.of("http://skin/herobrine"));
         assertTrue(HauntManager.validate(bad).stream()
                         .anyMatch(m -> m.contains("invertido")),

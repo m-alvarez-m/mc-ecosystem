@@ -79,6 +79,10 @@ public final class EventFXPlugin extends JavaPlugin {
                 getConfig().getStringList("haunting.sounds.storm_pool"),
                 getConfig().getDouble("haunting.sounds.storm_volume_multiplier", 1.8),
                 getConfig().getString("haunting.appearance.sound", ""),
+                getConfig().getDouble("haunting.appearance.sound_volume", 1.4),
+                getConfig().getString("haunting.turnaround.cue_sound", ""),
+                getConfig().getDouble("haunting.turnaround.cue_volume", 1.0),
+                getConfig().getDouble("haunting.appearance.seen_min_seconds", 1.0),
                 getConfig().getStringList("haunting.skin_pool"));
         var hauntManager = new com.mcecosystem.eventfx.haunt.HauntManager(
                 this,

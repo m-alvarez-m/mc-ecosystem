@@ -72,7 +72,16 @@ public final class HauntManager implements Listener {
             List<String> stormPool,
             double stormVolumeMultiplier,
             // Sonido al materializarse el fantasma ("" = aparición muda).
+            // Es un CUE de susto: volumen propio y alto (el ambiental es sutil).
             String appearanceSound,
+            double appearanceSoundVolume,
+            // Cebo del turnaround: debe ser AUDIBLE y distinto (los pasos
+            // vanilla se pierden). "" = usar el soundPool ambiental.
+            String turnaroundCueSound,
+            double turnaroundCueVolume,
+            // seen=true solo si el objetivo mantuvo al fantasma en su cono de
+            // vision este tiempo acumulado (un instante no cuenta como "visto").
+            double seenMinSeconds,
             List<String> skinPool) {}
 
     /** Relojes y memoria por jugador. Solo viven mientras está online. */
@@ -98,6 +107,7 @@ public final class HauntManager implements Listener {
         long durationMs;
         boolean seen;
         boolean seenForced;
+        long seenAccumMs; // tiempo acumulado dentro del cono de vision
     }
 
     private static final class PendingTurn {
@@ -420,14 +430,18 @@ public final class HauntManager implements Listener {
 
     private void startTurnaround(Player p) {
         // Sonido puntual DETRÁS del jugador; si voltea a tiempo, lo ve.
+        // Cebo dedicado y FUERTE: el turnaround muere si no se oye.
         double behind = normalize(p.getLocation().getYaw() + 180 + (random.nextDouble() * 60 - 30));
         Location src = offset(p.getLocation(), behind, 10);
-        String sound = s.soundPool().isEmpty()
-                ? "minecraft:block.gravel.step"
-                : s.soundPool().get(random.nextInt(s.soundPool().size()));
+        String sound = !s.turnaroundCueSound().isEmpty()
+                ? s.turnaroundCueSound()
+                : s.soundPool().isEmpty()
+                        ? "minecraft:block.gravel.step"
+                        : s.soundPool().get(random.nextInt(s.soundPool().size()));
+        float volume = s.turnaroundCueSound().isEmpty()
+                ? (float) s.soundVolume() : (float) s.turnaroundCueVolume();
         try {
-            p.playSound(src, sound, SoundCategory.AMBIENT,
-                    (float) s.soundVolume(), 1.0f);
+            p.playSound(src, sound, SoundCategory.AMBIENT, volume, 1.0f);
         } catch (Exception ignored) {
             return;
         }
@@ -483,8 +497,14 @@ public final class HauntManager implements Listener {
                 return true; // se desconectó: el fantasma muere con su testigo
             }
             double dist = p.getLocation().distance(g.loc);
+            // seen honesto: acumula tiempo mirandolo (fineTick = 5 ticks =
+            // 250 ms) y solo cuenta como visto tras seen_min_seconds. Un
+            // barrido instantaneo del cono ya no basta.
             if (!g.seen && lookingAt(p, g.loc, s.viewConeDegrees())) {
-                g.seen = true;
+                g.seenAccumMs += 250;
+                if (g.seenAccumMs >= s.seenMinSeconds() * 1000) {
+                    g.seen = true;
+                }
             }
             long elapsed = now - g.spawnedAt;
             boolean expired = elapsed >= g.durationMs;
@@ -515,8 +535,9 @@ public final class HauntManager implements Listener {
         if (!s.appearanceSound().isEmpty()) {
             try {
                 // Desde la posición del fantasma: el susto tiene dirección.
+                // Volumen propio (alto): es el cue que hace voltear a mirar.
                 p.playSound(ground, s.appearanceSound(),
-                        SoundCategory.AMBIENT, (float) s.soundVolume(), 1.0f);
+                        SoundCategory.AMBIENT, (float) s.appearanceSoundVolume(), 1.0f);
             } catch (Exception e) {
                 plugin.getLogger().warning("Sonido de aparición no reproducible: "
                         + s.appearanceSound());
