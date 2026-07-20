@@ -2,6 +2,51 @@
 
 Procedimientos operativos para desplegar, monitorear y recuperar el sistema ante incidentes.
 
+## Checklist de nacimiento del mundo real
+
+El staging fue el laboratorio; el mundo real nace UNA sola vez y no migra
+hacia atrás (ADR-002). Recorrer esta lista COMPLETA antes de que entre el
+primer jugador de verdad. Marcar cada punto solo tras verificarlo.
+
+1. **Rotar la App Key de Backblaze B2.** La clave de staging pasó por
+   herramientas de chat y por logs. En el panel de Backblaze: crear una App
+   Key NUEVA restringida al bucket, ponerla en `infra/.env`
+   (`B2_ACCOUNT_ID` / `B2_ACCOUNT_KEY`), lanzar un backup de prueba
+   (`docker exec mc-ecosystem-backup-1 /scripts/backup.sh db`) y confirmar que
+   sube a B2. **Solo entonces** borrar la App Key vieja. Verificar → borrar,
+   nunca al revés (si la nueva falla, la vieja sigue siendo tu red).
+
+2. **Guardar los secretos de producción en el gestor de contraseñas.**
+   `RESTIC_PASSWORD` es irremplazable: perderla = backups irrecuperables
+   (restic no tiene recuperación de contraseña). Guardar en el gestor:
+   `RESTIC_PASSWORD` y una copia íntegra del `infra/.env` de producción
+   (contraseñas de Postgres, `MC_APP_PASSWORD`, `RCON_PASSWORD`, credenciales
+   B2, `PLAYIT_SECRET_KEY`). El `.env` está gitignorado: si se pierde el disco
+   sin copia, no está en ningún commit.
+
+3. **Simulacro de restauración offsite final.** Antes de confiar el mundo real
+   a los backups, un último drill DESDE la nube:
+   `docker exec mc-ecosystem-backup-1 /scripts/restore-drill.sh --offsite`.
+   Debe terminar en `SIMULACRO OK`. Anotarlo en la tabla de restauración.
+
+4. **Borrar el mundo de staging.** El mundo real nace limpio, no hereda las
+   pruebas. Con el servidor parado: borrar `infra/staging-data/world*`
+   (o empezar con un `staging-data/` nuevo). Ojo: esto también resetea
+   `haunting.json` y los datos locales del plugin — es lo deseado.
+
+5. **Verificar la whitelist definitiva.** Repoblar `whitelist.json` con los
+   nombres reales de los jugadores, EXACTOS y por rcon (nunca por env, que
+   resuelve UUIDs premium y rompe el modo offline — ver la sección de
+   whitelist). Confirmar con `whitelist list` que están todos y solo ellos.
+
+6. **Config de EventFX en valores de producción.** Confirmar en
+   `infra/configs/plugins/EventFX/config.yml` que NO quedaron valores de
+   prueba: haunting con relojes reales (apariciones ~105 min, sonidos 20-40
+   min, turnaround ~90 min), y decidir conscientemente `exempt` y las reglas
+   de no-crueldad para el mundo real (en staging quedaron: exempt vacío,
+   no-crueldad desactivada). Arrancar y confirmar que EventFX no emite
+   `[haunting config]` warnings.
+
 ## Tareas recurrentes
 
 | Frecuencia | Tarea | Cómo |
