@@ -10,5 +10,11 @@
     "sounds": [
       { "name": "mcecosystem:haunt/cue" }
     ]
+  },
+  "haunt.nina": {
+    "category": "ambient",
+    "sounds": [
+      { "name": "mcecosystem:haunt/nina" }
+    ]
   }
 }

@@ -85,15 +85,15 @@ haunting:
     interval_min_minutes: 20
     interval_max_minutes: 40
     volume: 0.4
-    # La risa de la bruja da mas miedo que el zombie (que "es parte del
-    # juego"). ambient.cave para atmosfera de fondo.
+    # Nina cantando "lalala" en la oscuridad (resource pack): mas
+    # perturbador que sonidos vanilla. ambient.cave para atmosfera de fondo.
     pool:
-      - "minecraft:entity.witch.celebrate"
+      - "mcecosystem:haunt.nina"
       - "minecraft:ambient.cave"
     # En tormenta la lluvia entierra los pasos: pool alterno y volumen
     # amplificado.
     storm_pool:
-      - "minecraft:entity.witch.celebrate"
+      - "mcecosystem:haunt.nina"
       - "minecraft:ambient.cave"
     storm_volume_multiplier: 1.8
   skin_pool:
