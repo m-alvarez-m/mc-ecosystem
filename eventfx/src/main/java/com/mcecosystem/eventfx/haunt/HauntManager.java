@@ -21,6 +21,7 @@ import org.bukkit.util.Vector;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -139,11 +140,54 @@ public final class HauntManager implements Listener {
     /** Arranca las dos tareas: vigilancia gruesa (5 s) y fina (5 ticks).
      *  Blindadas: una excepción en un tick no debe matar el timer. */
     public void startTasks() {
+        for (String warning : validate(s)) {
+            plugin.getLogger().warning("[haunting config] " + warning);
+        }
         plugin.getServer().getScheduler().runTaskTimer(plugin,
                 () -> safely(this::coarseTick), 100L, 100L);
         plugin.getServer().getScheduler().runTaskTimer(plugin,
                 () -> safely(this::fineTick), 5L, 5L);
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
+    }
+
+    /**
+     * Revisa la config y devuelve advertencias de valores que romperían el
+     * haunting en silencio. La REGLA DE ORO: el rango mínimo de spawn debe
+     * superar close_despawn_distance; si no, el fantasma nace dentro de su
+     * propio radio de huida y se desvanece en 0.0 s (nadie lo ve, pero la
+     * telemetría sí lo registra). Aprendido en vivo el 2026-07-18.
+     */
+    public static List<String> validate(Settings s) {
+        List<String> warnings = new ArrayList<>();
+        // Estrictamente <: en == el fantasma sobrevive al spawn (solo huye
+        // al acercarse); < significa que NACE dentro del radio y muere ya.
+        if (s.nightMinDistance() < s.closeDespawnDistance()) {
+            warnings.add("night_min_distance (" + s.nightMinDistance()
+                    + ") < close_despawn_distance (" + s.closeDespawnDistance()
+                    + "): parte de los fantasmas nocturnos naceran dentro de su"
+                    + " radio de huida y duraran ~0s. Sube night_min_distance.");
+        }
+        if (s.dayMinDistance() < s.closeDespawnDistance()) {
+            warnings.add("day_min_distance (" + s.dayMinDistance()
+                    + ") < close_despawn_distance (" + s.closeDespawnDistance()
+                    + "): parte de los fantasmas diurnos naceran dentro de su"
+                    + " radio de huida y duraran ~0s. Sube day_min_distance.");
+        }
+        if (s.nightMinDistance() > s.nightMaxDistance()) {
+            warnings.add("night_min_distance > night_max_distance: rango invertido.");
+        }
+        if (s.dayMinDistance() > s.dayMaxDistance()) {
+            warnings.add("day_min_distance > day_max_distance: rango invertido.");
+        }
+        if (s.soundMinMinutes() > s.soundMaxMinutes()) {
+            warnings.add("sounds.interval_min_minutes > interval_max_minutes:"
+                    + " rango invertido (los sonidos ambientales no sonaran).");
+        }
+        if (s.turnaroundMinSeconds() > s.turnaroundMaxSeconds()) {
+            warnings.add("turnaround.duration_min_seconds > duration_max_seconds:"
+                    + " rango invertido.");
+        }
+        return warnings;
     }
 
     private void safely(Runnable tick) {

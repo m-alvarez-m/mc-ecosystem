@@ -121,6 +121,45 @@ class HauntManagerTest {
     }
 
     @Test
+    void validateAcceptsProductionLikeConfig() {
+        // night_min 15 == close_despawn 15: sobrevive al spawn, sin warning.
+        assertTrue(HauntManager.validate(settings(List.of())).isEmpty(),
+                "una config sana no debe producir advertencias");
+    }
+
+    @Test
+    void validateFlagsGhostBornInsideFleeRadius() {
+        // La regla de oro: night_min 10 < close_despawn 15 => nace muerto.
+        HauntManager.Settings bad = new HauntManager.Settings(List.of(), 40,
+                10, 20, 15, 6.0, 2,
+                120, 30, 6, 15, 2,
+                35, 50, 10, 25, 40, 35,
+                1, 90, 40, 4, 1, 2,
+                20, 40, 0.4, List.of("minecraft:ambient.cave"),
+                List.of(), 1.8, "",
+                List.of("http://skin/herobrine"));
+        assertTrue(HauntManager.validate(bad).stream()
+                        .anyMatch(m -> m.contains("night_min_distance")),
+                "debe advertir cuando night_min < close_despawn");
+    }
+
+    @Test
+    void validateFlagsInvertedRanges() {
+        // night_min 25 > night_max 15: rango invertido.
+        HauntManager.Settings bad = new HauntManager.Settings(List.of(), 40,
+                10, 20, 15, 6.0, 2,
+                120, 30, 6, 15, 2,
+                35, 50, 25, 15, 40, 35,
+                1, 90, 40, 4, 1, 2,
+                20, 40, 0.4, List.of("minecraft:ambient.cave"),
+                List.of(), 1.8, "",
+                List.of("http://skin/herobrine"));
+        assertTrue(HauntManager.validate(bad).stream()
+                        .anyMatch(m -> m.contains("invertido")),
+                "debe advertir un rango min>max");
+    }
+
+    @Test
     void companyPausesAllClocks() {
         join("Solitario");
         join("Vecino"); // a 0 bloques: jamás hay soledad
