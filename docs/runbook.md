@@ -320,3 +320,52 @@ Cada backup se copia a B2 inmediatamente después de crearse en local
   se eliminó el 2026-07-16.
 - Drill contra la nube: `restore-drill.sh --offsite` (mismas verificaciones,
   restaurando desde B2). Recomendado incluirlo en el simulacro mensual.
+
+## Corte de luz: qué protege el búfer y qué no (limitación conocida)
+
+Verificado en un corte real el **2026-07-22**.
+
+**El búfer SQLite del plugin NO protege contra un corte de luz, y no puede.**
+El búfer solo guarda eventos que el plugin *intentó* enviar y **fallaron**
+(API caída con el servidor vivo). En un apagón mueren plugin, API y Postgres
+**a la vez**: no existe esa ventana, y los eventos en vuelo simplemente nunca
+llegaron a ninguna forma durable.
+
+Evidencia del corte del 2026-07-22:
+- Los últimos eventos (`03:36:32`) tienen `received_at ≈ ts` (~20 ms): fluían
+  en tiempo real hasta el instante del corte.
+- **No hay `server.stop`** de ese apagado → `onDisable` nunca corrió, prueba
+  de que fue abrupto.
+- Al arrancar, el plugin **no reportó eventos pendientes**: búfer vacío.
+
+Que el mecanismo sí funciona se ve en los `server.stop` de reinicios
+*ordenados*, que llevan la firma clásica: `ts` del apagado y `received_at`
+~90-120 s después (esperaron en SQLite al siguiente arranque).
+
+### `session.start` sin `session.end` (huérfanas)
+
+El fix de `flushForShutdown` (commit 4824fdf) cierra las sesiones en apagados
+**ordenados**, pero un corte de luz no da oportunidad de ejecutar nada. Queda
+una `session.start` huérfana por cada jugador conectado en ese momento.
+
+Detectarlas:
+
+```sql
+WITH s AS (
+  SELECT id, player_uuid, ts, type,
+         LEAD(type) OVER (PARTITION BY player_uuid ORDER BY ts) AS siguiente
+  FROM events WHERE type IN ('session.start','session.end')
+)
+SELECT id, ts, COALESCE(siguiente,'(nada despues)') AS evento_siguiente
+FROM s WHERE type='session.start' AND (siguiente IS NULL OR siguiente <> 'session.end')
+ORDER BY ts;
+```
+
+Huérfanas conocidas a la fecha: `id 385` (2026-07-15, anterior al fix, de los
+crashloops del desarrollo temprano) e `id 7921` (2026-07-22, el corte de luz).
+
+**Implicación para Insight**: el cálculo de tiempo jugado **debe tolerar
+sesiones sin cierre** (ignorarlas, o cerrarlas con el último evento conocido
+de ese jugador). Nunca asumir que toda `session.start` tiene su `session.end`.
+Y jamás "arreglarlas" con UPDATE: el catálogo es append-only; si algún día se
+quiere corregir, se hace con eventos nuevos.
