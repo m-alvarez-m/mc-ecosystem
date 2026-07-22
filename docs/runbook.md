@@ -8,13 +8,21 @@ El staging fue el laboratorio; el mundo real nace UNA sola vez y no migra
 hacia atrás (ADR-002). Recorrer esta lista COMPLETA antes de que entre el
 primer jugador de verdad. Marcar cada punto solo tras verificarlo.
 
-1. **Rotar la App Key de Backblaze B2.** La clave de staging pasó por
-   herramientas de chat y por logs. En el panel de Backblaze: crear una App
-   Key NUEVA restringida al bucket, ponerla en `infra/.env`
+1. **Rotar la App Key de Backblaze B2.** Cualquier clave que haya pasado por
+   chat, correo o logs es una clave quemada. En el panel de Backblaze: crear
+   una App Key NUEVA restringida al bucket, ponerla en `infra/.env`
    (`B2_ACCOUNT_ID` / `B2_ACCOUNT_KEY`), lanzar un backup de prueba
-   (`docker exec mc-ecosystem-backup-1 /scripts/backup.sh db`) y confirmar que
-   sube a B2. **Solo entonces** borrar la App Key vieja. Verificar → borrar,
-   nunca al revés (si la nueva falla, la vieja sigue siendo tu red).
+   (`docker exec mc-ecosystem-backup-1 /scripts/backup.sh db`) y confirmar
+   que sube a B2. Además, correr `restore-drill.sh --offsite` con la clave
+   nueva antes de borrar la vieja: la escritura y la lectura usan la misma
+   clave, pero la ruta de restauración toca chunks aleatorios que un backup
+   simple no ejercita. **Solo con ambas verdes** borrar la App Key vieja.
+   Verificar → borrar, nunca al revés.
+
+   *Registro histórico de rotaciones (staging):*
+   | Fecha | Clave | Motivo |
+   |---|---|---|
+   | 2026-07-22 | `restic-prod-2` (reemplaza a la original) | La original pasó por chat de desarrollo |
 
 2. **Guardar los secretos de producción en el gestor de contraseñas.**
    `RESTIC_PASSWORD` es irremplazable: perderla = backups irrecuperables
