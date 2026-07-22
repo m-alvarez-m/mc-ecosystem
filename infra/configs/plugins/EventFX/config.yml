@@ -14,6 +14,41 @@ end_sound: "minecraft:block.beacon.deactivate"
 music_sound: "mcecosystem:evento.musica"
 music_loop_seconds: 0
 
+# CATALOGO DE EFECTOS DEL KI (fijos en codigo, duran todo el evento):
+#   speed IV .............. correr muy rapido
+#   strength II ........... golpes potentes
+#   jump_boost III ........ saltos altos (las rafagas lo suben a 25)
+#   health_boost IV ....... +8 corazones
+#   regeneration II ....... rellena la vida sola
+#   resistance I .......... -20% de dano
+#   dolphins_grace II ..... nadar a velocidad de tierra
+#   night_vision .......... ver de noche y bajo el agua
+#   fire_resistance ....... inmune a fuego y lava
+#   saturation ............ comida siempre llena (reemplaza al refill de #1)
+#   slow_falling .......... caidas suaves (clave con las rafagas de salto)
+
+# Convocatoria: al iniciar, TODOS son teletransportados a la zona mas
+# despejada del momento (elegida entre los participantes conectados), tras
+# una cuenta atras. Cada quien guarda SU origen y vuelve a EL al terminar.
+# La sede solo puede estar en el Overworld: si nadie esta ahi, no inicia.
+summon:
+  enabled: true
+  countdown_seconds: 5
+  # Radio del anillo exterior de muestreo (3 anillos x 8 direcciones = 24).
+  venue_scan_radius: 20
+  # Altura despejada que ya cuenta como "cielo abierto". No es arbitrario:
+  # es lo que suben las rafagas de salto, asi una caverna enorme puntua como
+  # cielo abierto y una cueva baja no.
+  venue_headroom_cap: 30
+
+# Caminar sobre el agua (tipo Frost Walker). Congela FROSTED_ICE (se derrite
+# solo) bajo los pies de participantes vivos, solo en superficie y solo sobre
+# fuentes de agua. Al terminar NO se fuerza el deshielo: sigue su curso vanilla.
+ice_walk:
+  enabled: true
+  # Radio del parche bajo los pies. Tope duro en codigo: 3.
+  radius: 1
+
 # Rafagas automaticas del evento: velocidad ultra y salto celestial
 # (el salto SIEMPRE con inmunidad mas larga que el vuelo).
 # Techos del motor: speed ~100; jump ~25 (mas alto y no despegas).

@@ -27,7 +27,13 @@ public final class EventFXPlugin extends JavaPlugin {
                 getConfig().getInt("bursts.speed_seconds", 12),
                 getConfig().getInt("bursts.jump_level", 25),
                 getConfig().getInt("bursts.jump_seconds", 10),
-                getConfig().getInt("bursts.immunity_seconds", 60));
+                getConfig().getInt("bursts.immunity_seconds", 60),
+                getConfig().getBoolean("summon.enabled", true),
+                getConfig().getInt("summon.countdown_seconds", 5),
+                getConfig().getInt("summon.venue_scan_radius", 20),
+                getConfig().getInt("summon.venue_headroom_cap", 30),
+                getConfig().getBoolean("ice_walk.enabled", true),
+                getConfig().getInt("ice_walk.radius", 1));
 
         // Mismo contrato que EventCollector: en Docker se inyecta EVENTS_API_URL.
         String apiUrl = System.getenv().getOrDefault("EVENTS_API_URL",
@@ -40,6 +46,10 @@ public final class EventFXPlugin extends JavaPlugin {
                 new StateStore(getDataFolder(), getLogger()),
                 settings,
                 task -> getServer().getScheduler().runTaskAsynchronously(this, task));
+
+        // El Ki ahora SI escucha el mundo: muerte, respawn, reconexion y
+        // movimiento (caminar sobre el agua). Antes no habia ni un listener.
+        getServer().getPluginManager().registerEvents(manager, this);
 
         PluginCommand command = getCommand("evento");
         EventoCommand executor = new EventoCommand(manager);
