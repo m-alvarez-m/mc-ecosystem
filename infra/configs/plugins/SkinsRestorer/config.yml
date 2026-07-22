@@ -289,6 +289,14 @@ login:
     noSkinIfLoginCanceled: true
     # This will make SkinsRestorer always apply the skin even if the player joins as premium on an online mode server.
     alwaysApplyPremium: false
+    offlineModeWarning:
+        # DESACTIVADO a proposito (2026-07-22). El aviso de "usas Minecraft
+        # pirateado" es un FALSO POSITIVO en nuestro servidor: corremos en
+        # modo offline por ADR-001, y el propio plugin admite que "cannot
+        # detect the exact launcher" — se lo muestra a TODOS los jugadores,
+        # tengan cuenta original o no. Como no se puede silenciar de forma
+        # selectiva, se apaga global (ver nota en docs/runbook.md).
+        enabled: false
 api:
     # Here you can fill in your APIKey for lower MineSkin request times.
     # Key can be requested from https://mineskin.org/apikey

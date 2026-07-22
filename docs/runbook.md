@@ -211,6 +211,29 @@ alta a alguien hacen falta DOS pasos y UN sermón:
 
 ## Skins en modo offline (SkinsRestorer)
 
+**Verificación de launcher: no aplica en modo offline.** SkinsRestorer muestra
+por defecto un aviso de "estás usando Minecraft pirateado / cracked" a los
+jugadores en modo offline. En nuestro servidor es un **falso positivo**:
+corremos offline por diseño (ADR-001) y el plugin **no puede distinguir** una
+cuenta original de una no oficial — su propia documentación lo admite
+("SkinsRestorer cannot detect the exact launcher"), así que se lo muestra a
+todo el mundo por igual.
+
+Como no existe forma de silenciarlo selectivamente (solo el jugador puede
+descartarlo a mano con `/skin notification ignore-cracked-client`), está
+**desactivado globalmente** en `infra/configs/plugins/SkinsRestorer/config.yml`:
+
+```yaml
+login:
+  offlineModeWarning:
+    enabled: false
+```
+
+Consecuencia asumida: un jugador cuyo launcher SÍ rompa las skins tampoco verá
+la pista. Si alguien reporta que su skin no se aplica, el diagnóstico manual
+está en `https://skinsrestorer.net/docs/troubleshooting/launcher-issues`
+(TLauncher y SKLauncher son los culpables habituales).
+
 En modo offline Mojang no aplica skins: las gestiona SkinsRestorer. El
 procedimiento depende del tipo de cuenta del jugador:
 
