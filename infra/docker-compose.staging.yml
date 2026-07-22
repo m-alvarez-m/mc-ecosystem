@@ -30,9 +30,10 @@ services:
       SYNC_SKIP_NEWER_IN_DESTINATION: "false"
       # Password fija para que el servicio backup pueda hacer save-off/on.
       RCON_PASSWORD: "${RCON_PASSWORD}"
-      # Resource pack del Modo Evento: URL desde la que los CLIENTES lo
-      # descargan (localhost:3000 solo sirve en esta máquina; para amigos
-      # por túnel hará falta exponer la API con un segundo túnel).
+      # Resource pack del Modo Evento: URL PUBLICA desde la que los CLIENTES
+      # lo descargan (el servicio packserver via un segundo tunel de playit;
+      # ver runbook). El SHA1 hace que el cliente re-descargue solo cuando el
+      # pack cambia de version.
       RESOURCE_PACK: "${RESOURCE_PACK_URL:-}"
       RESOURCE_PACK_SHA1: "${RESOURCE_PACK_SHA1:-}"
       MOTD: "STAGING LOCAL - desechable"
@@ -47,9 +48,33 @@ services:
     tty: true
     restart: unless-stopped
 
+  # Servidor estático dedicado SOLO para el resource pack. Se expone
+  # publicamente (segundo tunel de playit) en vez de tunelizar la API:
+  # asi el mundo ve UNICAMENTE pack.zip (solo lectura) y jamas el endpoint
+  # POST /events (que quedaria abierto a inyeccion de eventos falsos).
+  packserver:
+    image: nginx:alpine
+    volumes:
+      # Directorio (no archivo) para que al regenerar pack.zip el mount
+      # refleje el nuevo contenido sin recrear el contenedor.
+      - ./resourcepack:/usr/share/nginx/html:ro
+    restart: unless-stopped
+
+  # Quick tunnel de Cloudflare: da una URL publica HTTPS al packserver sin
+  # cuenta, sin token y sin dominio. LIMITACION CLAVE: la URL es EFIMERA -
+  # cambia en cada arranque del contenedor. Por eso NO se levanta este
+  # compose a mano: usar infra/publish-pack-url.sh, que espera la URL, la
+  # verifica y recien entonces arranca Minecraft (ver runbook).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://packserver:80
+    depends_on:
+      - packserver
+    restart: unless-stopped
+
   # Túnel público de playit.gg: expone el servidor a internet sin abrir
-  # puertos en el router. El agente alcanza al servidor por la red interna
-  # (minecraft-staging:25565); el túnel se configura en el dashboard.
+  # puertos en el router. El agente alcanza a los servicios por la red
+  # interna (minecraft-staging:25565, packserver:80); túneles en el dashboard.
   playit:
     image: ghcr.io/playit-cloud/playit-agent:1.0.10
     environment:
@@ -58,4 +83,5 @@ services:
       SECRET_KEY: "${PLAYIT_SECRET_KEY}"
     depends_on:
       - minecraft-staging
+      - packserver
     restart: unless-stopped

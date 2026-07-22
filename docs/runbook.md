@@ -83,6 +83,104 @@ contraseña incorrecta, y whitelist rebotando a un jugador no listado.
 probar el rebote de whitelist con un jugador que es OP hay que quitarle
 también el OP temporalmente.
 
+## Resource pack público (quick tunnel de Cloudflare)
+
+Los jugadores remotos no pueden descargar el pack de `localhost`: necesita una
+URL pública. Lo sirve el servicio **`packserver`** (nginx) expuesto por un
+**quick tunnel de Cloudflare** (`cloudflared`), sin cuenta, token ni dominio.
+
+Se expone `packserver` y NADA más (mínimo privilegio): tunelizar la API
+dejaría público `POST /events`, o sea inyección libre de eventos falsos.
+
+### ⚠️ LIMITACIÓN CRÍTICA: la URL es EFÍMERA
+
+El quick tunnel entrega una URL `https://xxx.trycloudflare.com` **distinta en
+cada arranque de `cloudflared`**. No se puede fijar (para eso haría falta un
+named tunnel, que exige un dominio propio en Cloudflare).
+
+Consecuencias, sin rodeos:
+- **Cada arranque ordenado del compose regenera la URL del pack.** La anterior
+  muere en el acto.
+- Si `cloudflared` se reinicia solo (crash), la URL publicada en
+  `server.properties` queda muerta: los clientes fallan al descargar el pack
+  y se quedan **sin música ni sonidos de haunting** (el juego sigue jugable).
+
+### Orden correcto de arranque (NO levantar el compose a mano)
+
+`depends_on` no ayuda: espera a que el contenedor arranque, no a que la URL
+exista. Por eso hay un script que impone el orden:
+
+```bash
+bash infra/publish-pack-url.sh
+```
+
+Hace, en este orden estricto:
+1. Levanta **solo** `packserver` + `cloudflared` (Minecraft todavía NO)
+2. Espera a que la URL aparezca en los logs de `cloudflared`
+3. **Verifica** con `curl` que `<url>/pack.zip` devuelve HTTP 200 (una URL
+   registrada no garantiza que el edge ya esté enrutando)
+4. Escribe `RESOURCE_PACK_URL` y `RESOURCE_PACK_SHA1` en `infra/.env`
+5. **Recién entonces** recrea `minecraft-staging`
+
+Si la URL no aparece o no responde, **aborta sin arrancar Minecraft**: mejor
+un servidor sin pack que uno anunciando una descarga rota.
+
+Los demás servicios (postgres, api, backup, playit) se pueden levantar antes
+sin problema: son independientes del pack.
+
+```bash
+docker compose -p mc-ecosystem up -d postgres api backup playit
+bash infra/publish-pack-url.sh
+```
+
+### ⚠️ Routers/ISP que filtran `trycloudflare.com`
+
+Descubierto en vivo el 2026-07-22: el router de casa devolvía **NXDOMAIN**
+para el hostname del túnel, mientras `1.1.1.1` y `8.8.8.8` lo resolvían
+perfectamente. Es filtrado de DNS (los quick tunnels se abusan para phishing,
+así que varios ISP/routers bloquean el dominio entero).
+
+Síntoma: el pack **no se descarga** aunque el túnel esté impecable. El
+servidor y el resto de internet lo ven bien; solo esa red no.
+
+- **Verificación**: `publish-pack-url.sh` prueba con **DNS-over-HTTPS**
+  (`--doh-url https://1.1.1.1/dns-query`) justamente para no dar un falso
+  negativo por el resolutor local. La vista que importa es la de internet.
+- **Arreglo para el jugador afectado**: poner DNS `1.1.1.1` o `8.8.8.8` en su
+  adaptador de red (o en su router). Sin eso, ese jugador no recibirá el pack.
+- Diagnóstico rápido:
+  `nslookup <host>.trycloudflare.com 1.1.1.1` (si resuelve aquí pero no sin
+  el `1.1.1.1`, es filtrado local).
+
+Es un costo inherente del quick tunnel; un named tunnel con dominio propio
+no sufre esto (ver ADR/decisión de no comprar dominio hoy).
+
+### Si cloudflared se reinicia (URL nueva)
+
+El script one-shot **no se re-dispara solo**. Dos opciones:
+- Volver a correr `bash infra/publish-pack-url.sh` (idempotente).
+- Dejarlo vigilando: `bash infra/publish-pack-url.sh --watch` — re-publica
+  automáticamente cuando detecta que la URL cambió. Ojo: recrear Minecraft
+  desconecta a los jugadores unos segundos, por eso solo actúa ante un cambio
+  real de URL.
+
+### Actualizar el pack (nuevo contenido → nuevo hash)
+
+El SHA-1 es lo que hace que los clientes **re-descarguen solos** cuando el
+pack cambia: Minecraft compara el hash declarado con el de su caché.
+
+1. Cambiar los assets en `infra/resourcepack/` (añadir/reemplazar `.ogg`,
+   editar `sounds.json`).
+2. Regenerar el zip: `infra/resourcepack/build-pack.ps1` (usa .NET, no
+   `Compress-Archive`: PowerShell 5.1 escribe rutas con `\` que Minecraft no
+   sabe leer). El script imprime el SHA-1 nuevo.
+3. Republicar: `bash infra/publish-pack-url.sh` — recalcula el SHA-1 solo,
+   lo escribe en `.env` y recrea el servidor.
+4. Verificar: entrar al servidor; el cliente debe re-descargar el pack (el
+   hash cambió) y el pack debe aparecer **en blanco**, no en rojo. Si sale en
+   rojo, es incompatibilidad de `pack_format` en `pack.mcmeta` (se lee del
+   `version.json` del jar del cliente).
+
 ## Alta de un jugador nuevo
 
 El servidor es offline-mode con whitelist + AuthMe (ver ADR-001). Para dar de
