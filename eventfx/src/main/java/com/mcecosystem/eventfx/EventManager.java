@@ -15,6 +15,8 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.BlockFadeEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
@@ -88,7 +90,19 @@ public final class EventManager implements Listener {
     private BukkitTask autoEndTask;
     private BukkitTask musicTask;
     private BukkitTask burstTask;
+    private BukkitTask iceReaperTask;
     private int burstCount;
+    /** Frosted-ice del evento en curso. Vive en active.iceBlocks() cuando hay
+     *  evento; alias local para lookups sin nulls por todos lados. */
+    private Map<Long, StateStore.IceBlock> iceBlocks;
+    /** Throttle de persistencia del hielo: guardar cada 5s o cada 50 entradas
+     *  nuevas. Peor caso ante crash: hasta 5s / 50 bloques huerfanos, que
+     *  vanilla derretira solo en 1-4 min. Nunca puente permanente. */
+    private long lastIceSaveMillis;
+    private int iceEntriesSinceLastSave;
+    private static final long ICE_SAVE_INTERVAL_MS = 5000;
+    private static final int ICE_SAVE_ENTRIES = 50;
+    private static final long ICE_LIFE_MS = 8000;
     /** Lookup O(1) de participantes vivos del evento en curso. */
     private final Set<UUID> activeParticipants = new HashSet<>();
     /** Participantes offline al terminar: al reconectar hay que limpiarlos. */
@@ -163,7 +177,10 @@ public final class EventManager implements Listener {
         }
 
         active = new StateStore.State(name, System.currentTimeMillis(),
-                new HashMap<>(), assignments, origins);
+                new HashMap<>(), assignments, origins, new HashMap<>());
+        iceBlocks = active.iceBlocks();
+        lastIceSaveMillis = System.currentTimeMillis();
+        iceEntriesSinceLastSave = 0;
         activeParticipants.clear();
         assignedSkin.keySet().forEach(activeParticipants::add);
         burstCount = 0;
@@ -365,6 +382,12 @@ public final class EventManager implements Listener {
     private void scheduleRecurringTasks(long offsetTicks) {
         long start = offsetTicks + SEQUENCE_TICKS;
 
+        if (settings.iceWalkEnabled()) {
+            // Barrido del hielo cada 1 s: los bloques con >8s vuelven a agua.
+            iceReaperTask = plugin.getServer().getScheduler().runTaskTimer(plugin,
+                    this::iceReap, start + 20L, 20L);
+        }
+
         if (!settings.musicSound().isEmpty() && settings.musicLoopSeconds() > 0) {
             long loopTicks = settings.musicLoopSeconds() * 20L;
             musicTask = plugin.getServer().getScheduler().runTaskTimer(plugin,
@@ -505,13 +528,22 @@ public final class EventManager implements Listener {
         }
         StateStore.State ended = active;
         active = null;
-        for (BukkitTask task : new BukkitTask[]{autoEndTask, musicTask, burstTask}) {
+        for (BukkitTask task : new BukkitTask[]{autoEndTask, musicTask, burstTask, iceReaperTask}) {
             if (task != null) {
                 task.cancel();
             }
         }
-        autoEndTask = musicTask = burstTask = null;
+        autoEndTask = musicTask = burstTask = iceReaperTask = null;
         activeParticipants.clear();
+        // Invariante dura de #4: al terminar no debe quedar NI UN frosted_ice
+        // del evento. Recorremos el mapa y convertimos a agua los que sigan
+        // siendo nuestros (los cambiados por el jugador se respetan).
+        if (ended.iceBlocks() != null) {
+            for (var e : ended.iceBlocks().entrySet()) {
+                unfreezeIfOurs(e.getValue().world(), e.getKey());
+            }
+        }
+        iceBlocks = null;
         long durationSecondsReal =
                 (System.currentTimeMillis() - ended.startedAtMillis()) / 1000;
 
@@ -771,9 +803,19 @@ public final class EventManager implements Listener {
             return;
         }
         int r = Math.min(ICE_RADIUS_MAX, Math.max(0, settings.iceWalkRadius()));
+        long now = System.currentTimeMillis();
+        boolean touched = false;
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 Block b = w.getBlockAt(fx + dx, fy - 1, fz + dz);
+                long key = packBlock(b.getX(), b.getY(), b.getZ());
+                // Ya es NUESTRO hielo vivo: solo reiniciamos el timestamp
+                // ("estela viva": mientras corras, sigue).
+                if (b.getType() == Material.FROSTED_ICE && iceBlocks.containsKey(key)) {
+                    iceBlocks.put(key, new StateStore.IceBlock(w.getName(), now));
+                    touched = true;
+                    continue;
+                }
                 if (b.getType() != Material.WATER) {
                     continue; // JAMAS se reemplaza un bloque que no sea agua
                 }
@@ -783,10 +825,133 @@ public final class EventManager implements Listener {
                 if (w.getBlockAt(b.getX(), b.getY() + 1, b.getZ()).getType().isSolid()) {
                     continue; // no es superficie
                 }
-                // FROSTED_ICE (no ICE): se derrite solo, cero grief permanente.
                 b.setType(Material.FROSTED_ICE, false);
+                iceBlocks.put(key, new StateStore.IceBlock(w.getName(), now));
+                iceEntriesSinceLastSave++;
+                touched = true;
             }
         }
+        if (touched) {
+            maybePersistIce();
+        }
+    }
+
+    /** Barrido cada 1 s: los bloques con vida > 8s vuelven a agua. */
+    private synchronized void iceReap() {
+        if (active == null || iceBlocks == null || iceBlocks.isEmpty()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        var it = iceBlocks.entrySet().iterator();
+        boolean changed = false;
+        while (it.hasNext()) {
+            var e = it.next();
+            if (now - e.getValue().bornAtMillis() < ICE_LIFE_MS) {
+                continue;
+            }
+            unfreezeIfOurs(e.getValue().world(), e.getKey());
+            it.remove();
+            changed = true;
+        }
+        if (changed) {
+            maybePersistIce();
+        }
+    }
+
+    /** Guarda anti-abuso indirecto: si el bloque ya no es NUESTRO frosted_ice
+     *  lo respetamos y salimos silenciosos. Un jugador puede haber puesto ICE
+     *  solido encima y picado el hielo — no es nuestro problema deshacer eso.
+     *  Pero el placement esta bloqueado (ver onPlace), asi que el caso normal
+     *  no ocurre. */
+    private void unfreezeIfOurs(String worldName, long packed) {
+        World w = plugin.getServer().getWorld(worldName);
+        if (w == null) {
+            return;
+        }
+        int x = unpackX(packed), y = unpackY(packed), z = unpackZ(packed);
+        Block b = w.getBlockAt(x, y, z);
+        if (b.getType() == Material.FROSTED_ICE) {
+            b.setType(Material.WATER, true); // true: notificar vecinos para fluir
+        }
+    }
+
+    private void maybePersistIce() {
+        long now = System.currentTimeMillis();
+        if (now - lastIceSaveMillis < ICE_SAVE_INTERVAL_MS
+                && iceEntriesSinceLastSave < ICE_SAVE_ENTRIES) {
+            return;
+        }
+        stateStore.save(active);
+        lastIceSaveMillis = now;
+        iceEntriesSinceLastSave = 0;
+    }
+
+    // Bit-packing tipo BlockPos: 26 bits X, 12 bits Y, 26 bits Z (rango
+    // suficiente para cualquier coordenada legal de Minecraft).
+    private static long packBlock(int x, int y, int z) {
+        return ((long) (x & 0x3FFFFFF) << 38)
+             | ((long) (z & 0x3FFFFFF) << 12)
+             | (y & 0xFFF);
+    }
+    private static int unpackX(long p) {
+        int v = (int) (p >> 38) & 0x3FFFFFF;
+        return (v << 6) >> 6; // sign-extend desde bit 25
+    }
+    private static int unpackZ(long p) {
+        int v = (int) (p >> 12) & 0x3FFFFFF;
+        return (v << 6) >> 6;
+    }
+    private static int unpackY(long p) {
+        int v = (int) p & 0xFFF;
+        return v > 0x7FF ? v - 0x1000 : v; // sign-extend desde bit 11
+    }
+
+    /** Vanilla derrite FROSTED_ICE por su tick aleatorio (edad 3 -> agua).
+     *  Lo cancelamos SOLO para bloques nuestros que aun no cumplen 8 s. */
+    @EventHandler(ignoreCancelled = true)
+    public void onFade(BlockFadeEvent event) {
+        if (event.getBlock().getType() != Material.FROSTED_ICE) {
+            return;
+        }
+        Block b = event.getBlock();
+        long key = packBlock(b.getX(), b.getY(), b.getZ());
+        StateStore.IceBlock ours;
+        synchronized (this) {
+            if (active == null || iceBlocks == null) {
+                return;
+            }
+            ours = iceBlocks.get(key);
+        }
+        if (ours == null) {
+            return; // no es nuestro: que vanilla haga lo suyo
+        }
+        if (System.currentTimeMillis() - ours.bornAtMillis() < ICE_LIFE_MS) {
+            event.setCancelled(true); // aun tiene vida: no dejarlo morir
+        }
+    }
+
+    /** Anti-abuso: no dejar construir sobre una posicion viva del mapa
+     *  (evita el patron "solido encima -> picar hielo -> puente permanente").
+     *  Actionbar informativo: silenciosamente cancelado es un misterio para
+     *  el jugador. */
+    @EventHandler(ignoreCancelled = true)
+    public void onPlace(BlockPlaceEvent event) {
+        Block against = event.getBlockAgainst();
+        Block placed = event.getBlockPlaced();
+        long keyAgainst = packBlock(against.getX(), against.getY(), against.getZ());
+        long keyPlaced = packBlock(placed.getX(), placed.getY(), placed.getZ());
+        synchronized (this) {
+            if (active == null || iceBlocks == null) {
+                return;
+            }
+            if (!iceBlocks.containsKey(keyAgainst) && !iceBlocks.containsKey(keyPlaced)) {
+                return;
+            }
+        }
+        event.setCancelled(true);
+        event.getPlayer().sendActionBar(net.kyori.adventure.text.Component.text(
+                "No puedes construir sobre tu rastro de Ki",
+                net.kyori.adventure.text.format.NamedTextColor.AQUA));
     }
 
     // ---------- catalogo ----------

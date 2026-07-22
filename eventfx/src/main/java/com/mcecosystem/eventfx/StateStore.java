@@ -26,11 +26,19 @@ public final class StateStore {
     public record SavedLocation(String world, double x, double y, double z,
                                 float yaw, float pitch) {}
 
-    /** Estado serializable del evento activo. savedSkins: null = sin override. */
+    /** Estado serializable del evento activo. savedSkins: null = sin override.
+     *  iceBlocks: posicion empaquetada (BlockPos.asLong) -> world + timestamp
+     *  de nacimiento/re-pisada. Persistido para que el crash-recovery
+     *  convierta todo a agua y cumpla la invariante dura de #4. */
     public record State(String name, long startedAtMillis,
                         Map<UUID, SavedSkin> savedSkins,
                         List<EventManager.Assignment> assignments,
-                        Map<UUID, SavedLocation> origins) {}
+                        Map<UUID, SavedLocation> origins,
+                        Map<Long, IceBlock> iceBlocks) {}
+
+    /** Bloque de hielo del evento: dependemos del mundo para poder revivirlo
+     *  tras crash, incluso si el jugador ya cambio de mundo. */
+    public record IceBlock(String world, long bornAtMillis) {}
 
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
     private final File file;

@@ -2,9 +2,14 @@ package com.mcecosystem.eventfx;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.block.Block;
+import org.bukkit.event.block.BlockFadeEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffectType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -269,5 +274,116 @@ class EventManagerTest {
                 new PlayerMoveEvent(ana, pies, buceo));
         assertEquals(Material.WATER, world.getBlockAt(bx, by - 1, bz).getType(),
                 "buceando NO debe congelar: solo se camina sobre la superficie");
+    }
+
+    // ---------- #4: hielo anti-abuso ----------
+
+    /** Simula un paso: prepara agua debajo y dispara PlayerMoveEvent al destino.
+     *  Devuelve el bloque congelado bajo los pies (para inspeccion posterior). */
+    private Block pisar(PlayerMock p, Location destino) {
+        int x = destino.getBlockX(), y = destino.getBlockY(), z = destino.getBlockZ();
+        world.getBlockAt(x, y - 1, z).setType(Material.WATER);
+        world.getBlockAt(x, y, z).setType(Material.AIR);
+        world.getBlockAt(x, y + 1, z).setType(Material.AIR);
+        server.getPluginManager().callEvent(
+                new PlayerMoveEvent(p, p.getLocation(), destino));
+        return world.getBlockAt(x, y - 1, z);
+    }
+
+    /** (a) re-pisar el mismo bloque reinicia el timestamp (estela viva). */
+    @Test
+    void rePisarElMismoBloqueReiniciaElTimestamp() throws InterruptedException {
+        PlayerMock ana = join("Ana", 500, 500);
+        assertTrue(manager.start("torneo", server.getConsoleSender()));
+        server.getScheduler().performTicks(TICKS_HASTA_PODER);
+
+        Location p1 = ana.getLocation().clone().add(1, 0, 0);
+        Block b = pisar(ana, p1);
+        assertEquals(Material.FROSTED_ICE, b.getType());
+
+        // Espera 3s (menos que los 8s de vida) y RE-pisa el mismo bloque.
+        // Ojo: NO usamos pisar() otra vez porque su helper resetea el suelo
+        // a WATER, borrando el FROSTED_ICE. Aqui el bloque YA es hielo y solo
+        // queremos ver que freezeUnder reinicia el timestamp.
+        Thread.sleep(3200);
+        Location afuera = p1.clone().add(3, 0, 0);
+        server.getPluginManager().callEvent(new PlayerMoveEvent(ana, afuera, p1));
+
+        // Espera otros 6s (total 9s desde el primer pisar). Si NO reiniciara
+        // el timestamp, ya habria muerto; como lo reiniciamos, aun vive.
+        Thread.sleep(6100);
+        server.getScheduler().performTicks(25); // dispara el reaper (1 tick = 50ms)
+        assertEquals(Material.FROSTED_ICE, b.getType(),
+                "re-pisar debe reiniciar el timestamp, no expirar el bloque");
+    }
+
+    /** (b) BlockFadeEvent cancelado mientras vida < 8 s, permitido despues. */
+    @Test
+    void fadeSeCancelaDentroDeLosOchoSegundos() throws InterruptedException {
+        PlayerMock ana = join("Ana", 600, 600);
+        assertTrue(manager.start("torneo", server.getConsoleSender()));
+        server.getScheduler().performTicks(TICKS_HASTA_PODER);
+
+        Block b = pisar(ana, ana.getLocation().clone().add(2, 0, 0));
+        assertEquals(Material.FROSTED_ICE, b.getType());
+
+        // Vanilla intenta derretirlo enseguida: DEBE cancelarse.
+        BlockFadeEvent tempranoEvt = new BlockFadeEvent(b, b.getState());
+        server.getPluginManager().callEvent(tempranoEvt);
+        assertTrue(tempranoEvt.isCancelled(),
+                "el fade se cancela mientras el bloque tenga <8s de vida");
+
+        // Pasados los 8s, el mismo fade YA no se cancela: vanilla lo derrite.
+        Thread.sleep(8100);
+        BlockFadeEvent tardio = new BlockFadeEvent(b, b.getState());
+        server.getPluginManager().callEvent(tardio);
+        assertFalse(tardio.isCancelled(),
+                "pasados los 8s, no bloqueamos el fade natural");
+    }
+
+    /** (c) invariante dura: al terminar el evento, NI UN frosted_ice del mapa. */
+    @Test
+    void alTerminarNoQuedaNingunFrostedIceDelEvento() {
+        PlayerMock ana = join("Ana", 700, 700);
+        assertTrue(manager.start("torneo", server.getConsoleSender()));
+        server.getScheduler().performTicks(TICKS_HASTA_PODER);
+
+        Block b1 = pisar(ana, ana.getLocation().clone().add(1, 0, 0));
+        Block b2 = pisar(ana, ana.getLocation().clone().add(2, 0, 0));
+        Block b3 = pisar(ana, ana.getLocation().clone().add(3, 0, 0));
+        assertEquals(Material.FROSTED_ICE, b1.getType());
+        assertEquals(Material.FROSTED_ICE, b2.getType());
+        assertEquals(Material.FROSTED_ICE, b3.getType());
+
+        assertTrue(manager.end());
+        server.getScheduler().performTicks(5);
+
+        // Invariante dura del issue #4: al terminar, ningun frosted_ice del
+        // mapa sigue en el mundo. Convertidos a agua, sin excepcion.
+        assertEquals(Material.WATER, b1.getType(), "b1 debe volver a agua");
+        assertEquals(Material.WATER, b2.getType(), "b2 debe volver a agua");
+        assertEquals(Material.WATER, b3.getType(), "b3 debe volver a agua");
+    }
+
+    /** (d) BlockPlaceEvent sobre posicion viva del mapa se cancela. */
+    @Test
+    void placeSobreRastroDeKiSeCancela() {
+        PlayerMock ana = join("Ana", 800, 800);
+        assertTrue(manager.start("torneo", server.getConsoleSender()));
+        server.getScheduler().performTicks(TICKS_HASTA_PODER);
+
+        Block hielo = pisar(ana, ana.getLocation().clone().add(1, 0, 0));
+        assertEquals(Material.FROSTED_ICE, hielo.getType());
+
+        // Intento colocar STONE sobre la posicion del hielo: debe cancelarse.
+        // (Constructor de 9 args: block, replaced, against, hand, player,
+        //  canBuild, hand slot.)
+        var placedState = hielo.getState();
+        BlockPlaceEvent evt = new BlockPlaceEvent(
+                hielo, placedState, hielo, new ItemStack(Material.STONE),
+                ana, true, EquipmentSlot.HAND);
+        server.getPluginManager().callEvent(evt);
+        assertTrue(evt.isCancelled(),
+                "colocar sobre una posicion viva del mapa debe cancelarse");
     }
 }
