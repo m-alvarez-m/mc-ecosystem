@@ -217,6 +217,27 @@ alta a alguien hacen falta DOS pasos y UN sermón:
    servidor eres otra persona: pierdes inventario, progreso, whitelist y
    cuenta. No cambies de nombre, jamás."* (Motivo técnico en ADR-001.)
 
+## Rituales de apagado
+
+Los scripts `start-mc.bat` y `stop-mc.bat` (raíz del repo) son la vía normal
+de arranque/apagado. `start-mc.bat` es idempotente: si el stack ya está sano
+no hace nada, solo muestra estado y copia la URL del pack al portapapeles.
+
+Tres reglas duras:
+
+1. **Ejecuta `stop-mc.bat` antes de apagar Windows.** El `stop` da a Paper
+   la oportunidad de guardar el mundo y a EventFX de disparar
+   `flushForShutdown` — es la diferencia entre un `session.end` limpio y
+   una sesión huérfana como las que documenta la sección "Corte de luz".
+2. **Nunca cierres Windows con contenedores vivos.** Windows corta a WSL
+   sin cortesía y equivale a un corte de luz: mundos posiblemente medio
+   guardados, eventos en vuelo perdidos y potencial corrupción de chunks.
+   Si el `stop-mc.bat` falla, investígalo antes de apagar.
+3. **UPS pequeño como plan a futuro.** Un SAI de ~500 VA da varios minutos
+   de margen y permite un `stop-mc.bat` ordenado ante un apagón real. Es
+   la única defensa real contra cortes; el búfer SQLite del plugin no
+   protege contra apagados abruptos (lo aprendimos el 2026-07-22).
+
 ## Re-verificacion humana de features (registro)
 
 Regla: un issue **no se considera cerrado del todo** hasta ejercitarlo en
