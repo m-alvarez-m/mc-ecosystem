@@ -40,12 +40,18 @@ if errorlevel 1 (
 
 REM ============================================================
 REM 2) Stack ya sano? Idempotencia.
+REM    Requerimos running Y healthy: un contenedor 'exited' puede
+REM    mantener 'healthy' del ultimo check, no cuenta como sano.
 REM ============================================================
-set "MC_HEALTH="
-for /f %%i in ('docker inspect --format "{{.State.Health.Status}}" mc-ecosystem-minecraft-staging-1 2^>nul') do set "MC_HEALTH=%%i"
-if "!MC_HEALTH!"=="healthy" (
-    echo Stack ya esta sano ^(minecraft-staging: healthy^).
-    goto :show_state
+set "MC_STATUS="
+for /f %%i in ('docker inspect --format "{{.State.Status}}" mc-ecosystem-minecraft-staging-1 2^>nul') do set "MC_STATUS=%%i"
+if "!MC_STATUS!"=="running" (
+    set "MC_HEALTH="
+    for /f %%i in ('docker inspect --format "{{.State.Health.Status}}" mc-ecosystem-minecraft-staging-1 2^>nul') do set "MC_HEALTH=%%i"
+    if "!MC_HEALTH!"=="healthy" (
+        echo Stack ya esta sano ^(minecraft-staging: running + healthy^).
+        goto :show_state
+    )
 )
 
 REM ============================================================
@@ -63,15 +69,23 @@ if errorlevel 1 (
 )
 echo.
 
-where bash >nul 2>&1
-if errorlevel 1 (
-    echo ERROR: 'bash' no esta en el PATH. Instala Git for Windows
+REM Descubrir Git bash por ruta absoluta: al hacer doble-click en un .bat
+REM Windows arranca CMD con el PATH del SISTEMA, y ahi C:\Windows\System32
+REM \bash.exe (el proxy de WSL) gana. Sin distro Linux instalada eso da
+REM "execvpe(/bin/bash) failed". Ir directo al bash de Git evita la trampa.
+set "BASH_EXE="
+if exist "C:\Program Files\Git\bin\bash.exe" set "BASH_EXE=C:\Program Files\Git\bin\bash.exe"
+if not defined BASH_EXE if exist "C:\Program Files\Git\usr\bin\bash.exe" set "BASH_EXE=C:\Program Files\Git\usr\bin\bash.exe"
+if not defined BASH_EXE if exist "%ProgramFiles(x86)%\Git\bin\bash.exe" set "BASH_EXE=%ProgramFiles(x86)%\Git\bin\bash.exe"
+if not defined BASH_EXE (
+    echo ERROR: no encontre Git Bash en las rutas estandar.
+    echo Instala Git for Windows desde https://git-scm.com/download/win
     echo ^(publish-pack-url.sh es un script de bash^).
     goto :err
 )
 
 echo Publicando URL del pack y arrancando minecraft-staging...
-bash infra/publish-pack-url.sh
+"!BASH_EXE!" infra/publish-pack-url.sh
 if errorlevel 1 (
     echo.
     echo ERROR: publish-pack-url.sh fallo. Mira sus mensajes arriba
