@@ -54,7 +54,7 @@ REM    base (postgres, api, backup, playit) -> publish-pack-url.sh
 REM    (que levanta packserver + cloudflared -> verifica URL -> minecraft)
 REM ============================================================
 echo Levantando servicios base ^(postgres, api, backup, playit^)...
-docker compose -f mc-ecosystem\infra\docker-compose.dev.yml -f mc-ecosystem\infra\docker-compose.staging.yml -p mc-ecosystem up -d postgres api backup playit
+docker compose -f infra\docker-compose.dev.yml -f infra\docker-compose.staging.yml -p mc-ecosystem up -d postgres api backup playit
 if errorlevel 1 (
     echo.
     echo ERROR: no se pudieron levantar los servicios base.
@@ -71,7 +71,7 @@ if errorlevel 1 (
 )
 
 echo Publicando URL del pack y arrancando minecraft-staging...
-bash mc-ecosystem/infra/publish-pack-url.sh
+bash infra/publish-pack-url.sh
 if errorlevel 1 (
     echo.
     echo ERROR: publish-pack-url.sh fallo. Mira sus mensajes arriba
@@ -87,8 +87,8 @@ echo.
 
 REM URL del pack desde infra/.env (fuente de verdad tras publish-pack-url.sh).
 set "PACK_URL="
-if exist "mc-ecosystem\infra\.env" (
-    for /f "usebackq tokens=1,* delims==" %%A in ("mc-ecosystem\infra\.env") do (
+if exist "infra\.env" (
+    for /f "usebackq tokens=1,* delims==" %%A in ("infra\.env") do (
         if /i "%%A"=="RESOURCE_PACK_URL" set "PACK_URL=%%B"
     )
 )
