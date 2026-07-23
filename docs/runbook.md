@@ -217,6 +217,16 @@ alta a alguien hacen falta DOS pasos y UN sermón:
    servidor eres otra persona: pierdes inventario, progreso, whitelist y
    cuenta. No cambies de nombre, jamás."* (Motivo técnico en ADR-001.)
 
+## Re-verificacion humana de features (registro)
+
+Regla: un issue **no se considera cerrado del todo** hasta ejercitarlo en
+vivo en el staging, aunque GitHub lo marque CLOSED. Los tests de MockBukkit
+son necesarios pero no suficientes.
+
+| Fecha | Issue | Cases verificados | Notas |
+|---|---|---|---|
+| 2026-07-23 | #4 (hielo Ki) | rastro efimero 8s, anti-puente al terminar, place bloqueado sobre rastro, crash-recovery convierte a agua | Bug de despliegue capturado: el jar en `infra/staging-data/plugins/` no siempre coincide con `build/libs/`. Al re-verificar, forzar el copy antes de reiniciar |
+
 ## Skins en modo offline (SkinsRestorer)
 
 **Verificación de launcher: no aplica en modo offline.** SkinsRestorer muestra
@@ -294,6 +304,7 @@ tarea del proyecto más importante que volver a tener backups restaurables.
 | Fecha | Resultado | Notas |
 |---|---|---|
 | 2026-07-16 | OK | Drill inicial: dump con 2371 eventos cargado; level.dat presente |
+| 2026-07-22 | OK offsite | Con `restic-prod-2` (rotacion B2): 12,509 eventos; level.dat 89.8 MiB |
 
 ### Restauración real (incidente)
 
