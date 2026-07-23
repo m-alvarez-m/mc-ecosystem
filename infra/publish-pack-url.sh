@@ -35,9 +35,19 @@ log() { echo "[pack-url] $*"; }
 die() { echo "[pack-url] ERROR: $*" >&2; exit 1; }
 compose() { docker compose "${COMPOSE_ARGS[@]}" "$@"; }
 
-# Ultima URL anunciada por cloudflared en sus logs.
+# Ultima URL anunciada por cloudflared en sus logs, filtrando SOLO la
+# sesion actual: docker compose stop+start conserva los logs, y cada
+# arranque de cloudflared imprime una URL nueva. Sin --since $StartedAt
+# el tail devolveria una URL de una sesion anterior que Cloudflare ya
+# dejo morir (bug real, cazado en vivo el 2026-07-23).
 current_tunnel_url() {
-    docker logs "$CF_CONTAINER" 2>&1 | grep -oE "$URL_RE" | tail -1
+    local started
+    started="$(docker inspect --format '{{.State.StartedAt}}' "$CF_CONTAINER" 2>/dev/null)"
+    if [ -n "$started" ]; then
+        docker logs --since "$started" "$CF_CONTAINER" 2>&1 | grep -oE "$URL_RE" | tail -1
+    else
+        docker logs "$CF_CONTAINER" 2>&1 | grep -oE "$URL_RE" | tail -1
+    fi
 }
 
 wait_for_url() {
