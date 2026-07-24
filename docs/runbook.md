@@ -248,6 +248,37 @@ son necesarios pero no suficientes.
 |---|---|---|---|
 | 2026-07-23 | #4 (hielo Ki) | rastro efimero 8s, anti-puente al terminar, place bloqueado sobre rastro, crash-recovery convierte a agua | Bug de despliegue capturado: el jar en `infra/staging-data/plugins/` no siempre coincide con `build/libs/`. Al re-verificar, forzar el copy antes de reiniciar |
 
+## Contenido comunitario del pack
+
+Política de qué se acepta añadir al servidor (plugins, datapacks, assets del
+resource pack). Vale por igual para mobiliario, minijuegos, mecánicas nuevas
+o cualquier cosa que amplíe el mundo.
+
+**1. Cero migración a Forge/Fabric, bajo ninguna circunstancia.** Es la línea
+más gruesa. Todo el ecosistema (CoreProtect, AuthMe, SkinsRestorer,
+PacketEvents, EventCollector, EventFX) son plugins de Paper; mover el server
+a otro loader significa reescribir y republicar todo — no hay atajo. Si una
+idea de contenido "sólo existe en Forge", la idea se descarta o se busca
+alternativa; nunca se descarta el stack. Esto vetó a MrCrayfish's Furniture
+el 2026-07-23: es mod de Forge/Fabric y su port aparente en formato
+"datapack" no existe.
+
+**2. Solo se aceptan datapacks + resource packs vanilla-compatibles.** Se
+integran al `pack.zip` del repo (o al mundo, si es datapack) y viajan al
+cliente por el flujo que ya tenemos (URL pública anunciada en
+`server.properties`). Cero plugin adicional para "contenido decorativo",
+cero requisito extra del cliente (nada de instalar mods).
+
+**3. Antes de instalar, se evalúan opciones concretas.** No se acepta una
+categoría abstracta ("mobiliario", "minijuegos") y se elige después: se
+listan candidatos reales con enlace, se comparan contra los criterios
+(no rompe balance, no requiere cliente especial, se descarga con el pack o
+va al mundo como datapack, mantenimiento activo) y se decide. Los ADR
+existen para dejar registro de este tipo de decisión cuando pesan.
+
+*Backlog v1.1*: mobiliario decorativo (sillas, mesas, iluminación) →
+issue #5, con criterios y antecedente ya escritos.
+
 ## Skins en modo offline (SkinsRestorer)
 
 **Verificación de launcher: no aplica en modo offline.** SkinsRestorer muestra
