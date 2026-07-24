@@ -21,3 +21,23 @@ settings:
 security:
   minPasswordLength: 8
   passwordHash: 'BCRYPT'
+
+# maxRegPerIp: 0 (ilimitado) por diseno de la infra actual.
+#
+# Descubierto el 2026-07-23: TODOS los jugadores llegan al server con la
+# misma IP interna de Docker (172.18.0.5, la del contenedor playit haciendo
+# de proxy). AuthMe no puede distinguir IPs de jugadores, asi que cualquier
+# limite maxRegPerIp bloquea al enesimo jugador legitimo aunque venga de
+# otra ciudad. La proteccion no aporta seguridad y bloquea uso normal.
+# La whitelist (obligatoria, ADR-001) ya filtra quien puede llegar a
+# registrarse: un randam no puede plantarse en la pantalla de /register.
+# Pendiente: investigar proxy protocol en playit (issue #6) para
+# recuperar la IP real del jugador y volver a tener limite por IP.
+settings:
+  restrictions:
+    maxRegPerIp: 0
+  registration:
+    # Aviso "X has N accounts" a los OPs al conectarse un jugador. Util
+    # en servers publicos para detectar alts; aqui es solo ruido porque
+    # todos los jugadores comparten IP interna de Docker.
+    displayOtherAccounts: false
