@@ -23,9 +23,31 @@ set -uo pipefail
 BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$BASE"
 
-COMPOSE_ARGS=(-f infra/docker-compose.dev.yml -f infra/docker-compose.staging.yml -p mc-ecosystem)
+# MC_MODE selecciona a que compose se le publica la URL del pack. Default
+# staging para que el flujo existente no cambie; se pasa MC_MODE=prod
+# desde start-mc.bat (o export en shell) cuando arrancamos el mundo real.
+MC_MODE="${MC_MODE:-staging}"
+case "$MC_MODE" in
+    staging)
+        MC_COMPOSE_FILE="infra/docker-compose.staging.yml"
+        MC_SERVICE="minecraft-staging"
+        ;;
+    prod)
+        MC_COMPOSE_FILE="infra/docker-compose.prod.yml"
+        MC_SERVICE="minecraft-prod"
+        ;;
+    *)
+        echo "[pack-url] ERROR: MC_MODE debe ser staging|prod (recibido: $MC_MODE)" >&2
+        exit 1
+        ;;
+esac
+
+COMPOSE_ARGS=(-f infra/docker-compose.dev.yml -f "$MC_COMPOSE_FILE" -p mc-ecosystem)
 ENV_FILE="infra/.env"
 PACK="infra/resourcepack/pack.zip"
+# Nombre de contenedor de cloudflared. El project prefix "mc-ecosystem" se
+# comparte entre staging y prod, y el servicio se llama "cloudflared" en
+# ambos composes; asi que este nombre no depende de MC_MODE.
 CF_CONTAINER="mc-ecosystem-cloudflared-1"
 URL_TIMEOUT=120          # segundos esperando que la URL aparezca en los logs
 VERIFY_TIMEOUT=90        # segundos esperando que el edge enrute pack.zip
@@ -122,15 +144,16 @@ publish() {
 
     # up -d, NO restart: restart reusa el contenedor con su env viejo. Hay que
     # recrear para que la imagen de itzg reescriba server.properties.
-    compose up -d minecraft-staging >/dev/null 2>&1 \
-        || die "no se pudo recrear minecraft-staging"
-    log "minecraft-staging recreado con la URL y el SHA-1 nuevos"
+    compose up -d "$MC_SERVICE" >/dev/null 2>&1 \
+        || die "no se pudo recrear $MC_SERVICE"
+    log "$MC_SERVICE recreado con la URL y el SHA-1 nuevos"
 }
 
 main() {
     docker info >/dev/null 2>&1 || die "Docker no esta corriendo"
     [ -f "$ENV_FILE" ] || die "falta $ENV_FILE"
 
+    log "modo: $MC_MODE (servicio: $MC_SERVICE)"
     log "levantando packserver + cloudflared (Minecraft todavia NO)"
     compose up -d packserver cloudflared >/dev/null 2>&1 \
         || die "no se pudieron levantar packserver/cloudflared"

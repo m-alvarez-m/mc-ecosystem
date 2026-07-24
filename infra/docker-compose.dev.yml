@@ -26,7 +26,11 @@ services:
       # Dos líneas de defensa: repo local (rápido, primera línea) y B2
       # (resguardo externo). Cada backup local se copia a B2 con restic copy.
       RESTIC_REPOSITORY: "/repo"
-      RESTIC_REPOSITORY_OFFSITE: "b2:mc-ecosystem-backups"
+      # RESTIC_OFFSITE: default apunta al repo raíz del bucket B2 (uso de
+      # staging, histórico). Prod pone un sub-repo distinto en el MISMO
+      # bucket (b2:mc-ecosystem-backups:world-real), aislado por restic:
+      # snapshots de prod nunca se cruzan con los de staging.
+      RESTIC_REPOSITORY_OFFSITE: "${RESTIC_OFFSITE:-b2:mc-ecosystem-backups}"
       RESTIC_PASSWORD: "${RESTIC_PASSWORD}"
       B2_ACCOUNT_ID: "${B2_ACCOUNT_ID}"
       B2_ACCOUNT_KEY: "${B2_ACCOUNT_KEY}"
@@ -35,13 +39,22 @@ services:
       PGPASSWORD: "${POSTGRES_PASSWORD}"
       PGDATABASE: "mc_ecosystem"
       EVENTS_API_URL: "http://api:3000/events"
-      # rcon del staging para save-off/save-on durante el backup del mundo.
-      RCON_HOST: "minecraft-staging"
+      # rcon del servidor activo para save-off/save-on durante el backup
+      # del mundo. En staging: minecraft-staging (default). En prod: se
+      # sobreescribe con RCON_HOST=minecraft-prod en .env.
+      RCON_HOST: "${RCON_HOST:-minecraft-staging}"
       RCON_PASSWORD: "${RCON_PASSWORD}"
     volumes:
-      - ./backup-repo:/repo
-      # Read-only: el backup jamás puede tocar el mundo.
-      - ./staging-data:/data/staging:ro
+      # Repo local restic. Se separa por modo (backup-repo/ para staging,
+      # backup-repo-prod/ para prod) porque el chain de restic snapshots no
+      # se puede mezclar sin corromper la retención.
+      - ${BACKUP_REPO:-./backup-repo}:/repo
+      # Mundo del servidor activo, read-only: el backup JAMÁS toca el
+      # mundo. En staging: bind local ./staging-data. En prod: ruta
+      # absoluta al mundo real, se pone en WORLD_MOUNT del .env.
+      # (El path de contenedor sigue siendo /data/staging por compat con
+      # backup.sh, que hace glob /data/staging/world*.)
+      - ${WORLD_MOUNT:-./staging-data}:/data/staging:ro
     depends_on:
       postgres:
         condition: service_healthy
