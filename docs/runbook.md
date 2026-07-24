@@ -19,6 +19,11 @@ primer jugador de verdad. Marcar cada punto solo tras verificarlo.
    simple no ejercita. **Solo con ambas verdes** borrar la App Key vieja.
    Verificar → borrar, nunca al revés.
 
+   **Regla para el asistente**: nunca leer `infra/.env` para verificar
+   ediciones del dueño — una sola lectura quema la clave (ver rotación
+   del 2026-07-24). Alternativas: `grep -c '^VAR='` (sólo cuenta líneas,
+   no expone el valor), o pedirle al dueño confirmación explícita.
+
    *Registro histórico de rotaciones (staging):*
    | Fecha | Clave | Motivo |
    |---|---|---|
