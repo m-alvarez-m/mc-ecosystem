@@ -50,12 +50,15 @@ primer jugador de verdad. Marcar cada punto solo tras verificarlo.
    resuelve UUIDs premium y rompe el modo offline — ver la sección de
    whitelist). Confirmar con `whitelist list` que están todos y solo ellos.
 
-6. **Config de EventFX en valores de producción.** Confirmar en
-   `infra/configs/plugins/EventFX/config.yml` que NO quedaron valores de
-   prueba: haunting con relojes reales (apariciones ~105 min, sonidos 20-40
-   min, turnaround ~90 min), y decidir conscientemente `exempt` y las reglas
-   de no-crueldad para el mundo real (en staging quedaron: exempt vacío,
-   no-crueldad desactivada). Arrancar y confirmar que EventFX no emite
+6. **Config de EventFX en valores de producción.** Desde v1.0 los configs
+   de prod viven en `infra/configs-prod/` (separados de `infra/configs/`,
+   que quedó como el de staging). Confirmar en
+   `infra/configs-prod/plugins/EventFX/config.yml` que NO quedaron valores
+   de prueba: haunting con relojes reales (apariciones 120 ±30 min en
+   prod, sonidos 20-40 min, turnaround ~90 min), y decidir conscientemente
+   `exempt` y las reglas de no-crueldad para el mundo real (v1.0 nació con
+   `exempt: [Vancorbus]` — dueño exento — y no-crueldad desactivada,
+   idéntico a staging). Arrancar y confirmar que EventFX no emite
    `[haunting config]` warnings.
 
 ## Tareas recurrentes
