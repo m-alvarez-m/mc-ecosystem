@@ -1,0 +1,151 @@
+# EventFX - config versionada (se sincroniza al staging en cada arranque).
+# Solo ASCII: los acentos ya nos costaron un YAML corrupto (0x81).
+
+# Duracion de los buffs y del evento, en segundos.
+duration_seconds: 300
+
+# Sonido del PODER MAXIMO (id vanilla imponente por ahora).
+start_sound: "minecraft:entity.wither.spawn"
+
+# Sonido del EL PODER SE DESVANECE (beacon apagandose).
+end_sound: "minecraft:block.beacon.deactivate"
+
+# Banda sonora del evento (resource pack propio, infra/resourcepack/).
+music_sound: "mcecosystem:evento.musica"
+music_loop_seconds: 0
+
+# CATALOGO DE EFECTOS DEL KI (fijos en codigo, duran todo el evento):
+#   speed IV .............. correr muy rapido
+#   strength II ........... golpes potentes
+#   jump_boost III ........ saltos altos (las rafagas lo suben a 25)
+#   health_boost IV ....... +8 corazones
+#   regeneration II ....... rellena la vida sola
+#   resistance I .......... -20% de dano
+#   dolphins_grace II ..... nadar a velocidad de tierra
+#   night_vision .......... ver de noche y bajo el agua
+#   fire_resistance ....... inmune a fuego y lava
+#   saturation ............ comida siempre llena (reemplaza al refill de #1)
+#   slow_falling .......... caidas suaves (clave con las rafagas de salto)
+
+# Convocatoria: al iniciar, TODOS son teletransportados a la zona mas
+# despejada del momento (elegida entre los participantes conectados), tras
+# una cuenta atras. Cada quien guarda SU origen y vuelve a EL al terminar.
+# La sede solo puede estar en el Overworld: si nadie esta ahi, no inicia.
+summon:
+  enabled: true
+  countdown_seconds: 5
+  # Radio del anillo exterior de muestreo (3 anillos x 8 direcciones = 24).
+  venue_scan_radius: 20
+  # Altura despejada que ya cuenta como "cielo abierto". No es arbitrario:
+  # es lo que suben las rafagas de salto, asi una caverna enorme puntua como
+  # cielo abierto y una cueva baja no.
+  venue_headroom_cap: 30
+
+# Caminar sobre el agua (tipo Frost Walker). Congela FROSTED_ICE (se derrite
+# solo) bajo los pies de participantes vivos, solo en superficie y solo sobre
+# fuentes de agua. Al terminar NO se fuerza el deshielo: sigue su curso vanilla.
+ice_walk:
+  enabled: true
+  # Radio del parche bajo los pies. Tope duro en codigo: 3.
+  radius: 1
+
+# Rafagas automaticas del evento: velocidad ultra y salto celestial
+# (el salto SIEMPRE con inmunidad mas larga que el vuelo).
+# Techos del motor: speed ~100; jump ~25 (mas alto y no despegas).
+bursts:
+  enabled: true
+  max_count: 5
+  interval_seconds: 50
+  speed_level: 100
+  speed_seconds: 12
+  jump_level: 25
+  jump_seconds: 10
+  immunity_seconds: 60
+
+# Haunting: apariciones y sonidos falsos SOLO para jugadores en soledad.
+# /haunt on|off (persistente). La compania y las reglas de no-crueldad
+# PAUSAN los relojes, no los resetean.
+# REGLA DE ORO: los rangos de spawn deben ser SIEMPRE mayores que
+# close_despawn_distance (aprendido en vivo: nacer dentro del radio de
+# huida = duracion 0).
+haunting:
+  # Jugadores que JAMAS reciben sustos. En PRODUCCION el dueno se excluye:
+  # tiene visibilidad de admin (rcon, logs, /haunt) y ver un fantasma real
+  # mientras administra rompe la ilusion para el resto. En staging la lista
+  # esta vacia porque el dueno quiere probarlo en su propia piel.
+  exempt:
+    - "Vancorbus"
+  solitude_radius: 40
+  # Reglas de no-crueldad DESACTIVADAS por decision del dueno: el fantasma
+  # puede aparecer en cualquier momento (incluso en combate o con poca vida).
+  # Para reactivar la version "amable": session 10, death 20, combat 15,
+  # health 6. La soledad (nadie a 40 bloques) sigue siendo requisito.
+  min_session_minutes: 0
+  death_grace_minutes: 0
+  combat_grace_seconds: 0
+  min_health_hearts: 0
+  max_per_session: 2
+  appearance:
+    # PROD: reloj de 2h +/- 30 min. En staging es 105 min para poder cazar
+    # el evento en menos tiempo durante las pruebas.
+    interval_minutes: 120
+    jitter_minutes: 30
+    duration_seconds: 8
+    # seen=true solo si lo miraste este tiempo acumulado (no un instante).
+    seen_min_seconds: 1.0
+    # Se esfuma cuando el jugador entra a este radio (subido de 15 a 18:
+    # el usuario lo quiso mas huidizo). REGLA DE ORO: night_min y day_min
+    # deben superarlo, por eso el rango nocturno subio a 20-30.
+    close_despawn_distance: 18
+    center_grace_seconds: 2
+    # De dia se ve de lejos; de noche (o tormenta) se acerca.
+    day_min_distance: 35
+    day_max_distance: 50
+    night_min_distance: 19
+    night_max_distance: 26
+    min_angle_separation: 40
+    view_cone_degrees: 35
+    # Sonido al materializarse, desde la posicion del fantasma ("" = mudo).
+    # Sonido propio del resource pack (assets/mcecosystem/sounds/haunt/cue.ogg).
+    # Es el CUE que hace voltear a mirar: volumen alto (>1 extiende el radio).
+    sound: "mcecosystem:haunt.cue"
+    sound_volume: 1.4
+  turnaround:
+    max_per_night: 1
+    interval_minutes: 90
+    jitter_minutes: 40
+    turn_window_seconds: 4
+    duration_min_seconds: 1
+    duration_max_seconds: 2
+    # Cebo AUDIBLE (los pasos vanilla no se oyen). "" = usar sounds.pool.
+    cue_sound: "mcecosystem:haunt.cue"
+    cue_volume: 1.0
+  sounds:
+    interval_min_minutes: 20
+    interval_max_minutes: 40
+    volume: 0.4
+    # Nina cantando "lalala" en la oscuridad (resource pack): mas
+    # perturbador que sonidos vanilla. ambient.cave para atmosfera de fondo.
+    pool:
+      - "mcecosystem:haunt.nina"
+      - "minecraft:ambient.cave"
+    # En tormenta la lluvia entierra los pasos: pool alterno y volumen
+    # amplificado.
+    storm_pool:
+      - "mcecosystem:haunt.nina"
+      - "minecraft:ambient.cave"
+    storm_volume_multiplier: 1.8
+  skin_pool:
+    - "https://s.namemc.com/i/650ce4b9af830e29.png"
+
+# Pool de skins del Modo Evento (anime): URLs de textura oficiales.
+# Aleatorias y DISTINTAS: minimo tantas entradas como jugadores online.
+skin_pool:
+  - "http://textures.minecraft.net/texture/11f643eca64809a927d476812c0d8a9221a71de141b20d5999fc7797e0b659ed"
+  - "http://textures.minecraft.net/texture/fc745aff11af7f77c58ab12d07d415aa9c04041f632edf03275f19f48b64d4c4"
+  - "http://textures.minecraft.net/texture/2c7f5c019d62f1515b0ecc53a63acbc725199bdc4de93338a224249ffc0fc224"
+  - "http://textures.minecraft.net/texture/5278def844f507fcec2e530ea50cb69496a87dfe4f1b7c2a2fcff91894bcfced"
+  - "http://textures.minecraft.net/texture/43c9af51fe4e9a373f99a35d9b03e2e98cd9056fa6bfaa92e15c81a61ff32b98"
+  - "http://textures.minecraft.net/texture/4aeb083fd5c7b70244a30b7922b22aeadf24a4b60028f3341d7b5321d5e59b84"
+  - "http://textures.minecraft.net/texture/27d37d68b4841807402b3238107668523d47c626f3dd4ca42e7a5c1721758737"
+  - "http://textures.minecraft.net/texture/330d998e11b56ec74cd4a10b92b7ac12d9847616f0745dbd047ca48d0f55ac3f"

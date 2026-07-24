@@ -1,0 +1,103 @@
+# docker-compose.prod.yml -- NACIMIENTO DEL MUNDO REAL (v1.0)
+#
+# Copia funcional del compose de staging con los cambios de produccion.
+# Se usa en modo SECUENCIAL con staging: staging apagado -> prod arranca en
+# el mismo puerto 25565, reusando el tunel de playit (con Local Address
+# apuntado a "minecraft-prod:25565") y el mismo bucket B2 (prefijo
+# distinto).
+#
+# Diferencias claves respecto a staging.yml:
+#   - Volumen del mundo: ruta ABSOLUTA fuera del repo (el mundo real no
+#     vive en el arbol de git; el repo se puede borrar sin perder el mundo).
+#   - Servicio renombrado a minecraft-prod (nombre honesto en el yml y
+#     evita colision si por accidente hay dos composes con el mismo nombre).
+#   - MOTD del nacimiento: "Servidor real - sesion historica desde ...".
+#   - Whitelist inicial: solo Vancorbus (se rellena por rcon en el primer
+#     arranque; SIN env WHITELIST -- ver nota en staging.yml).
+#   - Configs desde configs-prod/ (EventFX con reloj de Herobrine 2h +/-
+#     30min y dueno en exempt; el resto identico a staging por ahora).
+#
+# El servicio backup vive en docker-compose.dev.yml y aun apunta a
+# staging (RCON_HOST=minecraft-staging, /data/staging=staging-data). Antes
+# de arrancar prod HAY QUE reapuntarlo -- ver seccion "Antes del primer
+# arranque" del handoff en el chat. Este archivo NO redefine backup para
+# no depender de merges de compose que fusionan listas de volumenes de
+# forma peligrosa.
+
+services:
+  minecraft-prod:
+    image: itzg/minecraft-server
+    environment:
+      TYPE: "PAPER"
+      # ADR-002: v1.0 nace en 26.1.2 (version mas alta que soporta
+      # CoreProtect 24.0). Migrar hacia adelante cuando CoreProtect publique.
+      VERSION: "26.1.2"
+      EULA: "TRUE"
+      MEMORY: "4G"
+      # ADR-001: modo offline + AuthMe + whitelist forzada (misma que staging).
+      ONLINE_MODE: "FALSE"
+      ENABLE_WHITELIST: "TRUE"
+      ENFORCE_WHITELIST: "TRUE"
+      # SIN env WHITELIST: la resolucion contra Mojang rompe en offline mode.
+      # La whitelist inicial (solo Vancorbus) se aplica por rcon en el primer
+      # arranque; ver runbook y el handoff del chat.
+      PLUGINS: |
+        https://github.com/AuthMe/AuthMeReloaded/releases/download/6.0.0/AuthMe-6.0.0-Paper.jar
+        https://cdn.modrinth.com/data/Lu3KuzdV/versions/Kma0kBsY/CoreProtect-CE-24.0.jar
+        https://github.com/SkinsRestorer/SkinsRestorer/releases/download/15.12.4/SkinsRestorer.jar
+        https://github.com/retrooper/packetevents/releases/download/v2.13.0/packetevents-spigot-2.13.0.jar
+      COPY_CONFIG_DEST: "/data"
+      SYNC_SKIP_NEWER_IN_DESTINATION: "false"
+      RCON_PASSWORD: "${RCON_PASSWORD}"
+      RESOURCE_PACK: "${RESOURCE_PACK_URL:-}"
+      RESOURCE_PACK_SHA1: "${RESOURCE_PACK_SHA1:-}"
+      # MOTD del nacimiento. Rellenar FIRST_LOGIN_DATE en .env antes del
+      # primer arranque; si no esta seteado, se muestra el placeholder
+      # entre corchetes (recordatorio visible para el dueno).
+      MOTD: "Servidor real - sesion historica desde ${FIRST_LOGIN_DATE:-[fecha del primer login]}"
+      EVENTS_API_URL: "http://api:3000/events"
+    ports:
+      # Mismo puerto que staging: modo secuencial (staging APAGADO antes de
+      # arrancar prod). Si algun dia se quiere paralelo, mover a 25566 y
+      # levantar un segundo tunel de playit.
+      - "25565:25565"
+    volumes:
+      # RUTA ABSOLUTA fuera del repo: el mundo real es propiedad separada
+      # del codigo. Contiene world/, world_nether/, world_the_end/ (formato
+      # Bukkit split, ya validado). itzg poblara /data en el primer arranque
+      # con plugins/, whitelist.json, ops.json, server.properties, etc.
+      - C:\Users\ADMIN\Documents\world-genesis-v1-paper-bukkit:/data
+      - ./configs-prod:/config:ro
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  # Identico al de staging: sirve el pack.zip por HTTP interno.
+  packserver:
+    image: nginx:alpine
+    volumes:
+      - ./resourcepack:/usr/share/nginx/html:ro
+    restart: unless-stopped
+
+  # Identico al de staging. IMPORTANTE: publish-pack-url.sh todavia esta
+  # cableado a staging (--compose-args y minecraft-staging hardcodeados).
+  # Antes del primer arranque de prod hay que adaptarlo -- ver handoff.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://packserver:80
+    depends_on:
+      - packserver
+    restart: unless-stopped
+
+  # Playit: mismo agente, mismo SECRET_KEY. En el dashboard de playit.gg
+  # cambia el Local Address del tunel "work-framework" de
+  # "minecraft-staging:25565" a "minecraft-prod:25565" ANTES del primer
+  # arranque. La URL publica (work-framework.gl.joinmc.link) se conserva.
+  playit:
+    image: ghcr.io/playit-cloud/playit-agent:1.0.10
+    environment:
+      SECRET_KEY: "${PLAYIT_SECRET_KEY}"
+    depends_on:
+      - minecraft-prod
+      - packserver
+    restart: unless-stopped
