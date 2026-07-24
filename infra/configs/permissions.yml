@@ -1,0 +1,21 @@
+# Permisos del servidor (Paper/Bukkit los lee al arranque).
+# NO usar 'reload confirm' para aplicar cambios: es notoriamente inestable
+# con plugins; hacer restart de minecraft-staging.
+
+# Permiso agregado que da los comandos basicos de SkinsRestorer a TODOS
+# los jugadores (whitelisted, autenticados por AuthMe). Sin este permiso
+# los defaults de SR son 'op', lo que obligaba a dar OP para que un
+# jugador se ponga skin (caso real 2026-07-23: Pacman26 se quedo sin poder
+# cambiarse la skin hasta que el owner le dio OP; solucion incorrecta,
+# ver arriba). La whitelist ya filtra quien puede llegar a estos comandos.
+skinsrestorer.player:
+    default: true
+    description: Comandos basicos de /skin para todos los jugadores
+    children:
+        skinsrestorer.command: true
+        skinsrestorer.command.set: true
+        skinsrestorer.command.set.url: true
+        skinsrestorer.command.clear: true
+        skinsrestorer.command.update: true
+        skinsrestorer.command.random: true
+        skinsrestorer.command.info: true
