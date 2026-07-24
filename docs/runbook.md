@@ -24,10 +24,11 @@ primer jugador de verdad. Marcar cada punto solo tras verificarlo.
    del 2026-07-24). Alternativas: `grep -c '^VAR='` (sólo cuenta líneas,
    no expone el valor), o pedirle al dueño confirmación explícita.
 
-   *Registro histórico de rotaciones (staging):*
+   *Registro histórico de rotaciones:*
    | Fecha | Clave | Motivo |
    |---|---|---|
    | 2026-07-22 | `restic-prod-2` (reemplaza a la original) | La original pasó por chat de desarrollo |
+   | 2026-07-24 | `restic-prod-3` (reemplaza a `restic-prod-2`) | La anterior pasó por chat: el asistente leyó `.env` para verificar edits del dueño (ver regla anti-quemar-keys arriba) |
 
 2. **Guardar los secretos de producción en el gestor de contraseñas.**
    `RESTIC_PASSWORD` es irremplazable: perderla = backups irrecuperables
