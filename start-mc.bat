@@ -2,8 +2,46 @@
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
-echo === MC Ecosystem: arranque ===
+REM ============================================================
+REM Modo de arranque: prod (default) o staging.
+REM   - Doble-click              -> prod (nacimiento del mundo real)
+REM   - start-mc.bat staging     -> staging (pruebas)
+REM   - start-mc.bat prod        -> prod (explicito)
+REM Default prod desde ADR-004/005: staging queda como opcion
+REM secundaria que hay que pedir a mano.
+REM ============================================================
+set "MC_MODE=%~1"
+if not defined MC_MODE set "MC_MODE=prod"
+
+if /i "!MC_MODE!"=="prod" (
+    set "MC_COMPOSE=infra\docker-compose.prod.yml"
+    set "MC_SERVICE=minecraft-prod"
+    set "MC_CONTAINER=mc-ecosystem-minecraft-prod-1"
+) else if /i "!MC_MODE!"=="staging" (
+    set "MC_COMPOSE=infra\docker-compose.staging.yml"
+    set "MC_SERVICE=minecraft-staging"
+    set "MC_CONTAINER=mc-ecosystem-minecraft-staging-1"
+) else (
+    echo ERROR: MC_MODE debe ser "prod" o "staging" ^(recibido: !MC_MODE!^)
+    echo Uso: start-mc.bat [prod^|staging]
+    pause
+    exit /b 1
+)
+
+echo === MC Ecosystem: arranque ^(modo: !MC_MODE!^) ===
 echo.
+
+REM Confirmacion humana obligatoria antes de tocar produccion.
+REM No se pide en staging (por definicion, es desechable).
+if /i "!MC_MODE!"=="prod" (
+    echo Este arranque va a levantar PRODUCCION ^(mundo real^).
+    echo Compose:   !MC_COMPOSE!
+    echo Servicio:  !MC_SERVICE!
+    echo.
+    echo Presiona ENTER para continuar, o Ctrl+C para cancelar.
+    pause
+    echo.
+)
 
 REM ============================================================
 REM 1) Verificar daemon de Docker.
@@ -44,12 +82,12 @@ REM    Requerimos running Y healthy: un contenedor 'exited' puede
 REM    mantener 'healthy' del ultimo check, no cuenta como sano.
 REM ============================================================
 set "MC_STATUS="
-for /f %%i in ('docker inspect --format "{{.State.Status}}" mc-ecosystem-minecraft-staging-1 2^>nul') do set "MC_STATUS=%%i"
+for /f %%i in ('docker inspect --format "{{.State.Status}}" !MC_CONTAINER! 2^>nul') do set "MC_STATUS=%%i"
 if "!MC_STATUS!"=="running" (
     set "MC_HEALTH="
-    for /f %%i in ('docker inspect --format "{{.State.Health.Status}}" mc-ecosystem-minecraft-staging-1 2^>nul') do set "MC_HEALTH=%%i"
+    for /f %%i in ('docker inspect --format "{{.State.Health.Status}}" !MC_CONTAINER! 2^>nul') do set "MC_HEALTH=%%i"
     if "!MC_HEALTH!"=="healthy" (
-        echo Stack ya esta sano ^(minecraft-staging: running + healthy^).
+        echo Stack ya esta sano ^(!MC_SERVICE!: running + healthy^).
         goto :show_state
     )
 )
@@ -60,7 +98,7 @@ REM    base (postgres, api, backup, playit) -> publish-pack-url.sh
 REM    (que levanta packserver + cloudflared -> verifica URL -> minecraft)
 REM ============================================================
 echo Levantando servicios base ^(postgres, api, backup, playit^)...
-docker compose -f infra\docker-compose.dev.yml -f infra\docker-compose.staging.yml -p mc-ecosystem up -d postgres api backup playit
+docker compose -f infra\docker-compose.dev.yml -f !MC_COMPOSE! -p mc-ecosystem up -d postgres api backup playit
 if errorlevel 1 (
     echo.
     echo ERROR: no se pudieron levantar los servicios base.
@@ -84,7 +122,9 @@ if not defined BASH_EXE (
     goto :err
 )
 
-echo Publicando URL del pack y arrancando minecraft-staging...
+REM MC_MODE ya esta en el env del proceso via set arriba; publish-pack-url.sh
+REM lo recoge y selecciona el compose + servicio correspondiente.
+echo Publicando URL del pack y arrancando !MC_SERVICE!...
 "!BASH_EXE!" infra/publish-pack-url.sh
 if errorlevel 1 (
     echo.
