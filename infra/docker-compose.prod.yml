@@ -63,10 +63,13 @@ services:
       - "25565:25565"
     volumes:
       # RUTA ABSOLUTA fuera del repo: el mundo real es propiedad separada
-      # del codigo. Contiene world/, world_nether/, world_the_end/ (formato
-      # Bukkit split, ya validado). itzg poblara /data en el primer arranque
-      # con plugins/, whitelist.json, ops.json, server.properties, etc.
-      - C:\Users\ADMIN\Documents\world-genesis-v1-paper-bukkit:/data
+      # del codigo. Contiene world/ en formato UNIFIED (Paper 26+): el
+      # mundo tiene sus dimensiones dentro de world/dimensions/minecraft/
+      # y los jugadores en world/players/data/ (ver ADR-006 para el error
+      # de asumir Bukkit split en ADR-005). itzg poblara /data en el
+      # primer arranque con plugins/, whitelist.json, ops.json,
+      # server.properties, etc.
+      - C:\Users\ADMIN\Documents\world-genesis-v1-prod:/data
       - ./configs-prod:/config:ro
     stdin_open: true
     tty: true

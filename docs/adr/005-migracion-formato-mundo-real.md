@@ -1,7 +1,12 @@
 # ADR-005: Migración del mundo real al formato Bukkit split
 
 - **Fecha**: 2026-07-24
-- **Estado**: aceptado
+- **Estado**: **superseded por ADR-006** (2026-07-24, mismo día). La
+  premisa central ("Paper 26.1.2 necesita Bukkit split") era falsa; Paper
+  26 usa formato unified. La reorganización manual descrita aquí produjo
+  un mount que Paper cargó sólo parcialmente (nether y end migrados
+  correctamente por Paper al arrancar, overworld ignorado y regenerado
+  desde cero). Ver ADR-006 para el diagnóstico y la ruta correcta.
 
 ## Contexto
 
