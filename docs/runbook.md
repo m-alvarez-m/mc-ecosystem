@@ -37,10 +37,13 @@ primer jugador de verdad. Marcar cada punto solo tras verificarlo.
    `docker exec mc-ecosystem-backup-1 /scripts/restore-drill.sh --offsite`.
    Debe terminar en `SIMULACRO OK`. Anotarlo en la tabla de restauración.
 
-4. **Borrar el mundo de staging.** El mundo real nace limpio, no hereda las
-   pruebas. Con el servidor parado: borrar `infra/staging-data/world*`
-   (o empezar con un `staging-data/` nuevo). Ojo: esto también resetea
-   `haunting.json` y los datos locales del plugin — es lo deseado.
+4. **Borrar el mundo de staging.** *N/A a partir de v1.0*: prod monta un
+   directorio propio (bind mount absoluto a
+   `C:\Users\ADMIN\Documents\world-genesis-v1-paper-bukkit`, ver ADR-005)
+   en vez de heredar `staging-data/`. Este item queda satisfecho por la
+   propia arquitectura de `docker-compose.prod.yml` — no hay mundo que
+   borrar. Si en el futuro un mundo naciera desde `staging-data/`, este
+   item vuelve a aplicar.
 
 5. **Verificar la whitelist definitiva.** Repoblar `whitelist.json` con los
    nombres reales de los jugadores, EXACTOS y por rcon (nunca por env, que
