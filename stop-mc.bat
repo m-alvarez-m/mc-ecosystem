@@ -8,7 +8,9 @@ echo Se detendran los contenedores del stack ^(stop, NO down: los
 echo volumenes de datos se conservan intactos^).
 echo.
 echo Presiona ENTER para continuar, o Ctrl+C para cancelar.
-pause
+REM pause ^>nul: suprime "Press any key to continue . . ." propio de
+REM pause; ya tenemos nuestro echo arriba, evitamos doble prompt.
+pause >nul
 
 echo.
 docker info >nul 2>&1

@@ -281,6 +281,16 @@ Los scripts `start-mc.bat` y `stop-mc.bat` (raíz del repo) son la vía normal
 de arranque/apagado. `start-mc.bat` es idempotente: si el stack ya está sano
 no hace nada, solo muestra estado y copia la URL del pack al portapapeles.
 
+**Preferir doble-click desde el Explorador de Windows** en vez de invocarlos
+desde Git Bash (`./start-mc.bat`). Motivo: son scripts `.bat` que corren
+bajo `cmd.exe`, y ese entorno es el que se prueba en cada release. Desde
+Bash pueden aparecer *warnings inofensivos* (mintty renderiza el `pause`
+distinto, alguna línea de salida se buffea antes de tiempo) que no rompen
+nada — el script termina en el mismo estado — pero confunden. Si Bash es
+la única opción a mano, se puede invocar sin problemas y esos warnings se
+ignoran; los fallos reales siempre se reflejan en `errorlevel` y aborto
+explícito, no en el ruido de mintty.
+
 Tres reglas duras:
 
 1. **Ejecuta `stop-mc.bat` antes de apagar Windows.** El `stop` da a Paper

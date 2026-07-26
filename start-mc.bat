@@ -39,7 +39,9 @@ if /i "!MC_MODE!"=="prod" (
     echo Servicio:  !MC_SERVICE!
     echo.
     echo Presiona ENTER para continuar, o Ctrl+C para cancelar.
-    pause
+    REM pause ^>nul: suprimir el "Press any key to continue . . ." propio
+    REM de pause; ya tenemos nuestro echo arriba, evitamos doble prompt.
+    pause >nul
     echo.
 )
 
@@ -59,7 +61,10 @@ if errorlevel 1 (
     echo Esperando hasta 60s a que el daemon responda...
     set /a c=0
     :wait_docker
-    timeout /t 3 /nobreak >nul
+    REM timeout.exe explicito: si el .bat se lanza desde Git Bash, PATH
+    REM puede resolver "timeout" al binario GNU (coreutils) que ignora /t
+    REM y trata "3 /nobreak" como argumento invalido. .exe fuerza cmd.
+    timeout.exe /t 3 /nobreak >nul
     docker info >nul 2>&1
     if not errorlevel 1 goto docker_ok
     set /a c+=3
@@ -133,6 +138,39 @@ if errorlevel 1 (
     goto :err
 )
 
+REM ============================================================
+REM 4) Espera activa: docker compose up devuelve cuando los
+REM    contenedores arrancan, NO cuando estan healthy. Sin esta
+REM    espera hay ventana ciega en la que el .bat dice "listo" pero
+REM    minecraft-prod aun esta cargando el mundo (~30-90s) y los
+REM    clientes que intentan conectar ven "server offline". Timeout
+REM    120s: mundos de 220 MB en Paper 26 tardan ~76s en healthy.
+REM ============================================================
+echo.
+echo Esperando a que los servicios queden listos (max 120s)...
+set /a wait_elapsed=0
+:wait_loop
+call :check_svc !MC_CONTAINER!             healthy MC_ST
+call :check_svc mc-ecosystem-postgres-1    healthy PG_ST
+call :check_svc mc-ecosystem-api-1         healthy API_ST
+call :check_svc mc-ecosystem-packserver-1  running PACK_ST
+call :check_svc mc-ecosystem-cloudflared-1 running CLOUD_ST
+echo   [!wait_elapsed!s]  mc:!MC_ST!  pg:!PG_ST!  api:!API_ST!  pack:!PACK_ST!  cloud:!CLOUD_ST!
+if "!MC_ST!"=="OK" if "!PG_ST!"=="OK" if "!API_ST!"=="OK" if "!PACK_ST!"=="OK" if "!CLOUD_ST!"=="OK" (
+    echo Todos los servicios listos tras !wait_elapsed!s.
+    goto :show_state
+)
+if !wait_elapsed! geq 120 (
+    echo.
+    echo ERROR: timeout esperando servicios listos (^>120s).
+    echo Estados finales arriba. Revisar logs:
+    echo   docker compose -p mc-ecosystem logs --tail 100
+    goto :err
+)
+timeout.exe /t 3 /nobreak >nul
+set /a wait_elapsed+=3
+goto :wait_loop
+
 :show_state
 echo.
 echo === Estado ===
@@ -165,3 +203,22 @@ exit /b 0
 echo.
 pause
 exit /b 1
+
+REM ============================================================
+REM Subrutina: comprueba el estado de un contenedor.
+REM   %1 = nombre del contenedor
+REM   %2 = estado esperado: healthy | running
+REM   %3 = variable de salida (recibe "OK" o el estado actual)
+REM Estrategia: intentar Health.Status primero; si esta vacio (el
+REM servicio no declara healthcheck), caer a State.Status. Compara
+REM contra el esperado y setea la salida.
+REM ============================================================
+:check_svc
+set "st_result="
+for /f %%h in ('docker inspect --format "{{.State.Health.Status}}" %1 2^>nul') do set "st_result=%%h"
+if not defined st_result (
+    for /f %%s in ('docker inspect --format "{{.State.Status}}" %1 2^>nul') do set "st_result=%%s"
+)
+if not defined st_result set "st_result=missing"
+if "!st_result!"=="%2" (set "%3=OK") else (set "%3=!st_result!")
+exit /b 0
