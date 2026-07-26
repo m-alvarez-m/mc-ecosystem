@@ -510,6 +510,58 @@ de ese jugador). Nunca asumir que toda `session.start` tiene su `session.end`.
 Y jamás "arreglarlas" con UPDATE: el catálogo es append-only; si algún día se
 quiere corregir, se hace con eventos nuevos.
 
+## Warnings de prod — estado
+
+Los logs de arranque de `minecraft-prod` emiten warnings que ya se han
+diagnosticado uno por uno. Esta tabla es su bitácora: cuando en 6 meses
+vuelvas a leer un log y veas uno de estos, sabrás si es intencional o
+un problema.
+
+| Warning | Fecha 1ª detección | Estado | Notas |
+|---|---|---|---|
+| `resource-pack-id missing, using default of 3c563052-...` | 2026-07-26 | **Resuelto** | Se pinó ese mismo UUID como `RESOURCE_PACK_ID` en `docker-compose.prod.yml`. Rotar sólo si el pack cambia radicalmente. |
+| `[AuthMe] No supported permissions system found!` | 2026-07-26 | **Aceptado** | AuthMe busca LuckPerms / PermissionsEx / GroupManager para grupos jerárquicos y cae al `permissions.yml` nativo de Bukkit cuando no encuentra ninguno. Con el modelo actual (1-3 jugadores, 1 OP, `permissions.yml` cubre SkinsRestorer) no hay caso de uso para grupos. Instalar LuckPerms sólo por callar el warning suma un plugin más que mantener y version-lockear — más frágil sin beneficio real. **Re-evaluar si** el server pasa de ~10 jugadores, o si aparece necesidad de roles diferenciados (moderador, admin distinto de OP, etc.). Mismo criterio que aplicamos con GeoIP: threat/complejidad no justifica hoy. |
+| `[AuthMe] GeoIp protections will be disabled` | 2026-07-26 | **Deferido, opt-in** | Requiere cuenta MaxMind (gratis con GeoLite2) → license key + account ID en `.env` como `MAXMIND_LICENSE_KEY` / `MAXMIND_ACCOUNT_ID`. Sin cuenta, se acepta como warning informativo. Para nuestra threat model (3 amigos whitelisted, offline mode, IP filtering) el valor es marginal. Ver "Activar GeoIP" abajo si un día conviene. |
+
+### Activar GeoIP en AuthMe (opt-in)
+
+Prerrequisito: cuenta MaxMind (gratis en <https://www.maxmind.com/en/geolite2/signup>).
+Genera una license key desde tu cuenta y anota tu account ID numérico.
+
+Pasos:
+
+1. Añadir a `infra/.env`:
+   ```
+   MAXMIND_LICENSE_KEY=<tu-key>
+   MAXMIND_ACCOUNT_ID=<tu-id>
+   ```
+
+2. Habilitar substitución de env vars en `docker-compose.prod.yml`
+   añadiendo al environment de `minecraft-prod`:
+   ```yaml
+   REPLACE_ENV_VARIABLES: "TRUE"
+   REPLACE_ENV_VARIABLES_PREFIX: "MAXMIND_"
+   ```
+
+3. Añadir a `infra/configs-prod/plugins/AuthMe/config.yml`:
+   ```yaml
+   Security:
+     GeoLiteAPI:
+       licenseKey: '${MAXMIND_LICENSE_KEY}'
+       accountId: ${MAXMIND_ACCOUNT_ID}
+   ```
+   (verificar el path exacto contra el `config.yml` que AuthMe deja en
+   `/data/plugins/AuthMe/` tras el primer arranque; puede haber cambiado
+   entre versiones).
+
+4. Recrear el contenedor: `docker compose -f infra/docker-compose.dev.yml
+   -f infra/docker-compose.prod.yml -p mc-ecosystem up -d --force-recreate
+   minecraft-prod`.
+
+5. Verificar en logs: el warning debe desaparecer y aparecer un mensaje
+   estilo *"GeoLite2 database updated"*. Si aparece *"invalid MaxMind
+   credentials"*, revisar key/id.
+
 ## Historial de retiros
 
 Registro de componentes decommissioned tras alcanzar v1.0. La política es

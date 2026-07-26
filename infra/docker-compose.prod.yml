@@ -51,6 +51,14 @@ services:
       RCON_PASSWORD: "${RCON_PASSWORD}"
       RESOURCE_PACK: "${RESOURCE_PACK_URL:-}"
       RESOURCE_PACK_SHA1: "${RESOURCE_PACK_SHA1:-}"
+      # UUID fijo del pack para que Paper no emita "resource-pack-id
+      # missing" en cada arranque. Este valor concreto es el que Paper
+      # venia auto-generando; pinarlo evita re-descarga en clientes que
+      # ya lo tenian cacheado. Si algun dia se cambia el pack a algo
+      # radicalmente distinto (nuevo naming, no un update), rotar este
+      # UUID a uno nuevo para que los clientes traten al pack como
+      # nuevo y limpien el anterior.
+      RESOURCE_PACK_ID: "3c563052-a936-34cc-8d6a-e11fc8450975"
       # MOTD del nacimiento. Rellenar FIRST_LOGIN_DATE en .env antes del
       # primer arranque; si no esta seteado, se muestra el placeholder
       # entre corchetes (recordatorio visible para el dueno).
