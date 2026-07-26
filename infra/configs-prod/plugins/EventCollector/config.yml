@@ -1,0 +1,5 @@
+# Segundos sin input (movimiento, chat, clics, comandos) para marcar AFK.
+afk_threshold_seconds: 300
+
+# Cada cuántos segundos se muestrea la posición de los jugadores no-AFK.
+position_sample_seconds: 60

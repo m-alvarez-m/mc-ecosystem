@@ -67,6 +67,23 @@ primer jugador de verdad. Marcar cada punto solo tras verificarlo.
    idéntico a staging). Arrancar y confirmar que EventFX no emite
    `[haunting config]` warnings.
 
+7. **Copiar el jar de EventCollector al mundo.** El plugin es local (no
+   está en `PLUGINS` del compose) — hay que compilarlo y copiarlo a mano
+   antes del primer arranque, o toda la telemetría de gameplay va al
+   vacío. Se aprendió en el nacimiento de v1.0 el 2026-07-24, cuando el
+   plugin quedó sin desplegar y se corrigió 3 días después (ver
+   "Despliegue inicial de EventCollector en prod" más abajo).
+
+   Pasos:
+   ```bash
+   cd plugin && ./gradlew build
+   cp plugin/build/libs/EventCollector-*.jar <world-dir>/plugins/
+   ```
+   Y versionar la config en `infra/configs-prod/plugins/EventCollector/config.yml`
+   (itzg la interpola a `/data/plugins/EventCollector/config.yml` al
+   arranque). Verificar en logs post-arranque:
+   `EventCollector activo. Endpoint: ... | umbral AFK: 300s`.
+
 ## Backups — limitación crítica: crond depende del stack up
 
 El servicio `backup` corre **crond dentro del contenedor**. Cuando el
@@ -561,6 +578,60 @@ Pasos:
 5. Verificar en logs: el warning debe desaparecer y aparecer un mensaje
    estilo *"GeoLite2 database updated"*. Si aparece *"invalid MaxMind
    credentials"*, revisar key/id.
+
+## Despliegues iniciales
+
+### Despliegue inicial de EventCollector en prod — 2026-07-26
+
+El nacimiento del mundo real (2026-07-24, ver ADR-006) **NO incluyó el
+plugin EventCollector**. Se corrige 3 días después, con historia de
+gameplay perdida entre esas fechas — aceptado como fecha real de inicio
+de captura.
+
+**Diagnóstico** (query a `events` el 2026-07-26 antes del despliegue):
+- 2026-07-15 → 07-23: **13 253 eventos** (23 tipos) de gameplay en
+  staging. Es todo el histórico "de reporte" que hemos venido consultando.
+- 2026-07-24: 114 eventos, sólo `server.*`, `event.end` (cierre de torneo)
+  y `backup.done`. Coletazos del último día de staging + primer arranque
+  broken de prod. Cero gameplay.
+- 2026-07-25 → 2026-07-26 pre-arranque: cero eventos del plugin, sólo
+  `backup.done` del script `backup.sh` (que no depende del plugin).
+
+**Causa raíz**: EventCollector no está en el `PLUGINS` list del compose
+(el plugin es local, no publicado — se compila desde `plugin/` y se
+copia a mano). Al nacer prod desde el mount limpio de Chunker, la
+carpeta `plugins/` no tenía `EventCollector*.jar`. Nadie hizo el copy.
+
+**Pasos aplicados**:
+
+1. Build local: `cd plugin && ./gradlew build` → `plugin/build/libs/EventCollector-0.1.0.jar`
+2. Config versionado: nuevo `infra/configs-prod/plugins/EventCollector/config.yml`
+   con `afk_threshold_seconds: 300` y `position_sample_seconds: 60`
+   (idénticos al default de `plugin/src/main/resources/config.yml`).
+3. Copy manual del jar a `C:\Users\ADMIN\Documents\world-genesis-v1-prod\plugins\`.
+4. Force-recreate de `minecraft-prod` (vía `start-mc.bat` con doble-click,
+   que además publica URL fresca del pack y ejercita el health-check loop).
+5. Verificación en logs: `EventCollector activo. Endpoint:
+   http://api:3000/events | umbral AFK: 300s | muestreo posicion: 60s`.
+6. Verificación end-to-end en vivo por el dueño: entró 34 s, colocó y
+   rompió 5 bloques, envió un mensaje de chat, salió. Todos los eventos
+   capturados con UUID correcto (`71804e99-...`), coords coherentes,
+   tool detectada, chat con contenido (decisión A), duración exacta,
+   IP hasheada.
+
+**Pérdida aceptada**: **~72 h de "el mundo real existía pero nadie lo
+miraba en telemetría"** (2026-07-24 08:17 UTC → 2026-07-26 23:26 UTC).
+En la práctica pérdida cero: no hubo gameplay real en ese intervalo,
+sólo arranques + verificaciones + drills. Pero conceptualmente marca el
+**cutoff de la captura del mundo real: 2026-07-26 23:26 UTC** (primer
+`server.start` con EventCollector cargado). Todo lo anterior en la tabla
+`events` es staging histórico o coletazos administrativos.
+
+**Preventivo para próximos despliegues** (v1.1+, otros mundos): añadir
+el copy del jar EventCollector a `plugins/` como **paso obligatorio del
+checklist de nacimiento**. Si en el futuro el plugin se publica en
+Modrinth o similar, migrarlo al `PLUGINS` list del compose y retirar
+esta rugosidad manual.
 
 ## Historial de retiros
 
