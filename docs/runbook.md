@@ -67,10 +67,50 @@ primer jugador de verdad. Marcar cada punto solo tras verificarlo.
    idéntico a staging). Arrancar y confirmar que EventFX no emite
    `[haunting config]` warnings.
 
+## Backups — limitación crítica: crond depende del stack up
+
+El servicio `backup` corre **crond dentro del contenedor**. Cuando el
+stack se apaga (`stop-mc.bat`, `docker compose stop`, apagar Windows),
+crond deja de correr y **ningún tick de backup ocurre**. Si el dueño
+juega en sprints y apaga entre sesiones, pueden pasar días sin backup
+aunque el schedule teórico sea cada hora / cada 6 h.
+
+**Incidente 2026-07-26**: primer chequeo post-nacimiento. Snapshots
+en `world-real`: 0 de `world`, 1 de `db` con fecha 2026-07-24 08:00 UTC
+(capturado durante la sesión de diagnóstico del mundo BROKEN — dato
+inválido). Entre el 2026-07-24 (fin sesión nacimiento) y hoy el stack
+estuvo apagado; ningún tick de crond corrió. **RPO real desde el
+nacimiento: infinito** hasta que el primer `world` haga snapshot.
+
+**Ritual defensivo obligatorio al inicio de cada sesión**:
+
+```bash
+MSYS_NO_PATHCONV=1 docker exec mc-ecosystem-backup-1 \
+    sh -c 'restic -r "$RESTIC_REPOSITORY_OFFSITE" snapshots'
+```
+
+Si el snapshot más reciente de `world` tiene >24 h, el gap es real y hay
+que actuar (backup manual o dejar el stack up hasta que corra el próximo
+tick automático — `15 */6 * * *`).
+
+**Fix arquitectónico pendiente** (no aplicado, documentado como opción):
+
+1. **Backup inmediato al arrancar**: modificar `backup/entrypoint.sh`
+   para que tras inicializar los repos ejecute `/scripts/backup.sh world`
+   una sola vez, antes de arrancar crond. Coste: cada `up` del stack
+   añade ~1-3 min al arranque (dependiendo del tamaño del mundo).
+2. **Scheduling externo**: mover el schedule a Windows Task Scheduler o
+   a un cron del host, que arranque un contenedor one-shot para hacer el
+   backup aunque el stack principal esté apagado. Más complejo, pero
+   independiza los backups del ciclo de vida del stack.
+
+Ninguna aplicada aún — decisión pendiente de discusión con el dueño.
+
 ## Tareas recurrentes
 
 | Frecuencia | Tarea | Cómo |
 |---|---|---|
+| **Cada sesión** (al arrancar el stack) | Verificar snapshots frescos en offsite | Comando de arriba; si >24 h de gap en `world`, actuar |
 | **Semanal** (lunes) | Revisar si CoreProtect ya soporta la versión de MC a la que queremos subir (hoy: 26.2, ver ADR-002) | `https://modrinth.com/plugin/coreprotect/versions` (muestra las versiones de MC soportadas por cada release). Si ya está: probar la subida en staging según ADR-002 |
 | **Mensual** (día 1) | Simulacro de restauración, local Y offsite | `restore-drill.sh` y `restore-drill.sh --offsite`; anotar resultado en la tabla de la sección de restauración |
 
