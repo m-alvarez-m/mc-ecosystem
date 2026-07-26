@@ -415,6 +415,7 @@ tarea del proyecto más importante que volver a tener backups restaurables.
 |---|---|---|
 | 2026-07-16 | OK | Drill inicial: dump con 2371 eventos cargado; level.dat presente |
 | 2026-07-22 | OK offsite | Con `restic-prod-2` (rotacion B2): 12,509 eventos; level.dat 89.8 MiB |
+| 2026-07-26 | OK offsite | Post-nacimiento: primer drill contra `world-real/` con `restic-prod-3` (rotacion B2), tras aplicar fix de backup-al-arrancar. Dump 13,334 eventos; world 222.343 MiB restaurado en 12s desde B2 (~19 MB/s); level.dat 4.0 KiB. Item 3 del checklist de nacimiento cerrado. |
 
 ### Restauración real (incidente)
 
