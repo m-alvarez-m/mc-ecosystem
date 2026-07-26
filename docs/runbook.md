@@ -93,18 +93,24 @@ Si el snapshot más reciente de `world` tiene >24 h, el gap es real y hay
 que actuar (backup manual o dejar el stack up hasta que corra el próximo
 tick automático — `15 */6 * * *`).
 
-**Fix arquitectónico pendiente** (no aplicado, documentado como opción):
+**Fix arquitectónico aplicado (2026-07-26)**:
 
-1. **Backup inmediato al arrancar**: modificar `backup/entrypoint.sh`
-   para que tras inicializar los repos ejecute `/scripts/backup.sh world`
-   una sola vez, antes de arrancar crond. Coste: cada `up` del stack
-   añade ~1-3 min al arranque (dependiendo del tamaño del mundo).
-2. **Scheduling externo**: mover el schedule a Windows Task Scheduler o
-   a un cron del host, que arranque un contenedor one-shot para hacer el
-   backup aunque el stack principal esté apagado. Más complejo, pero
-   independiza los backups del ciclo de vida del stack.
+- **Backup inmediato al arrancar**: `backup/entrypoint.sh` ejecuta
+  `/scripts/backup.sh world` y `db` tras inicializar los repos, antes de
+  arrancar crond. Cada `docker start` del servicio backup dispara un
+  snapshot fresco (ambos en local y en offsite vía `restic copy`), así
+  cada sesión abre con un restore point actualizado aunque la anterior
+  haya sido hace semanas. Coste: +1-3 min al arranque del stack. Errores
+  del backup inicial NO bloquean crond (fail-open por diseño; un backup
+  inicial fallado es alerta, no razón para no tener crond corriendo).
 
-Ninguna aplicada aún — decisión pendiente de discusión con el dueño.
+Alternativa **no aplicada**, documentada por si más adelante conviene:
+
+- **Scheduling externo**: mover el schedule a Windows Task Scheduler o
+  a un cron del host, que arranque un contenedor one-shot para hacer el
+  backup aunque el stack principal esté apagado. Independizaría los
+  backups del ciclo de vida del stack, pero añade moving parts fuera
+  del proyecto y complica el versionado.
 
 ## Tareas recurrentes
 
