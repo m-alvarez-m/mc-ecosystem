@@ -509,3 +509,15 @@ sesiones sin cierre** (ignorarlas, o cerrarlas con el último evento conocido
 de ese jugador). Nunca asumir que toda `session.start` tiene su `session.end`.
 Y jamás "arreglarlas" con UPDATE: el catálogo es append-only; si algún día se
 quiere corregir, se hace con eventos nuevos.
+
+## Historial de retiros
+
+Registro de componentes decommissioned tras alcanzar v1.0. La política es
+**preservar antes de borrar** hasta tener la red de seguridad equivalente
+en su lugar (backup en B2, ADR que la reemplace, etc.); las fechas aquí
+son las de la eliminación efectiva, posterior a la validación.
+
+| Fecha | Componente | Motivo y red de seguridad |
+|---|---|---|
+| 2026-07-26 | Container `mc-ecosystem-minecraft-staging-1` (`docker rm`) | Deployment secuencial: staging permanentemente atrás desde el nacimiento del 2026-07-24 (ADR-004). El bind mount `infra/staging-data/` en el host se conserva por si en el futuro se reactiva staging para pruebas de subida de versión (ADR-002); el container en sí no aportaba valor apagado. |
+| 2026-07-26 | Carpeta `C:\Users\ADMIN\Documents\world-genesis-v1-paper-bukkit-BROKEN\` (497 MB) | Intento fallido de reorganización manual a Bukkit split (ADR-005, superseded por ADR-006). Reemplazada por `world-genesis-v1-prod/` en formato unified. Redes de seguridad al borrar: `world-genesis-v1-paper/` (backup Chunker íntegro, 220 MB) + `world-genesis-v1.zip` (export original, 169 MB) + snapshot fresco de `world-real/` en B2 (222 MiB, drill verificado el 2026-07-26). |
