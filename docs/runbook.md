@@ -619,11 +619,11 @@ carpeta `plugins/` no tenía `EventCollector*.jar`. Nadie hizo el copy.
    tool detectada, chat con contenido (decisión A), duración exacta,
    IP hasheada.
 
-**Pérdida aceptada**: **~72 h de "el mundo real existía pero nadie lo
-miraba en telemetría"** (2026-07-24 08:17 UTC → 2026-07-26 23:26 UTC).
+**Pérdida aceptada**: **~63 h de "el mundo real existía pero nadie lo
+miraba en telemetría"** (2026-07-24 08:17 UTC → 2026-07-26 23:25:52 UTC).
 En la práctica pérdida cero: no hubo gameplay real en ese intervalo,
 sólo arranques + verificaciones + drills. Pero conceptualmente marca el
-**cutoff de la captura del mundo real: 2026-07-26 23:26 UTC** (primer
+**cutoff de la captura del mundo real: 2026-07-26 23:25:52 UTC** (primer
 `server.start` con EventCollector cargado). Todo lo anterior en la tabla
 `events` es staging histórico o coletazos administrativos.
 
