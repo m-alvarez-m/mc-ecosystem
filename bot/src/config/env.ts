@@ -20,6 +20,9 @@ export interface Config {
     baseUrl: string;
     timeoutMs: number;
   };
+  cursor: {
+    filePath: string;
+  };
 }
 
 interface RequiredVar {
@@ -33,6 +36,7 @@ const REQUIRED: RequiredVar[] = [
   { key: "DISCORD_EVENTS_CHANNEL_ID", description: "ID del canal donde el bot publica" },
   { key: "PORT", description: "Puerto HTTP para el endpoint /health" },
   { key: "API_BASE_URL", description: "URL base de la api del Event Store (p.ej. http://api:3000)" },
+  { key: "CURSOR_FILE", description: "Ruta al archivo JSON de persistencia del cursor" },
 ];
 
 // Default 10 s: cubre latencia local (compose network, sub-milisegundo)
@@ -88,5 +92,6 @@ export function loadConfig(): Config {
     },
     server: { port },
     eventStore: { baseUrl: rawBaseUrl, timeoutMs },
+    cursor: { filePath: process.env.CURSOR_FILE! },
   };
 }

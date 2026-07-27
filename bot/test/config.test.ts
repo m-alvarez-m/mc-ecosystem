@@ -12,6 +12,7 @@ const ALL_VARS = [
   "PORT",
   "API_BASE_URL",
   "HTTP_TIMEOUT_MS",
+  "CURSOR_FILE",
 ] as const;
 
 function setBaseValid(): void {
@@ -20,6 +21,7 @@ function setBaseValid(): void {
   process.env.DISCORD_EVENTS_CHANNEL_ID = "987654321098765432";
   process.env.PORT = "4000";
   process.env.API_BASE_URL = "http://api:3000";
+  process.env.CURSOR_FILE = "/var/lib/pulso/cursor.json";
 }
 
 describe("loadConfig", () => {
@@ -47,6 +49,7 @@ describe("loadConfig", () => {
     expect(config.eventStore.baseUrl).toBe("http://api:3000");
     // HTTP_TIMEOUT_MS ausente -> default 10 s.
     expect(config.eventStore.timeoutMs).toBe(10_000);
+    expect(config.cursor.filePath).toBe("/var/lib/pulso/cursor.json");
   });
 
   it("acepta HTTP_TIMEOUT_MS custom cuando es entero positivo", () => {
