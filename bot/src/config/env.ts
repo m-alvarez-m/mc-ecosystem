@@ -16,6 +16,10 @@ export interface Config {
   server: {
     port: number;
   };
+  eventStore: {
+    baseUrl: string;
+    timeoutMs: number;
+  };
 }
 
 interface RequiredVar {
@@ -28,7 +32,13 @@ const REQUIRED: RequiredVar[] = [
   { key: "DISCORD_GUILD_ID", description: "ID numerico del servidor Discord destino" },
   { key: "DISCORD_EVENTS_CHANNEL_ID", description: "ID del canal donde el bot publica" },
   { key: "PORT", description: "Puerto HTTP para el endpoint /health" },
+  { key: "API_BASE_URL", description: "URL base de la api del Event Store (p.ej. http://api:3000)" },
 ];
+
+// Default 10 s: cubre latencia local (compose network, sub-milisegundo)
+// mas margen amplio para picos. El consumidor puede subirlo si en el
+// futuro se hace long-polling con timeouts >30s.
+const DEFAULT_HTTP_TIMEOUT_MS = 10_000;
 
 export function loadConfig(): Config {
   const missing: string[] = [];
@@ -42,7 +52,7 @@ export function loadConfig(): Config {
     throw new Error(
       "Variables de entorno faltantes o vacias:\n" +
         missing.join("\n") +
-        "\n\nDefinelas en bot/.env (dev) o en infra/.env (deploy)."
+        "\n\nDefinelas en bot/.env (dev) o en infra/.env (deploy).",
     );
   }
 
@@ -52,6 +62,24 @@ export function loadConfig(): Config {
     throw new Error(`PORT invalido: "${rawPort}" (debe ser entero 1-65535)`);
   }
 
+  const rawBaseUrl = process.env.API_BASE_URL!;
+  try {
+    // Validacion cruda: si no parsea como URL, no vale.
+    new URL(rawBaseUrl);
+  } catch {
+    throw new Error(`API_BASE_URL invalida: "${rawBaseUrl}" (debe ser URL bien formada)`);
+  }
+
+  const rawTimeout = process.env.HTTP_TIMEOUT_MS;
+  let timeoutMs = DEFAULT_HTTP_TIMEOUT_MS;
+  if (rawTimeout !== undefined && rawTimeout.trim().length > 0) {
+    const parsed = Number(rawTimeout);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new Error(`HTTP_TIMEOUT_MS invalido: "${rawTimeout}" (debe ser entero positivo)`);
+    }
+    timeoutMs = parsed;
+  }
+
   return {
     discord: {
       token: process.env.DISCORD_BOT_TOKEN!,
@@ -59,5 +87,6 @@ export function loadConfig(): Config {
       eventsChannelId: process.env.DISCORD_EVENTS_CHANNEL_ID!,
     },
     server: { port },
+    eventStore: { baseUrl: rawBaseUrl, timeoutMs },
   };
 }

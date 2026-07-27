@@ -5,17 +5,29 @@ import { loadConfig } from "../src/config/env";
 // La fuente de datos es process.env; snapshot + restore para no
 // contaminar entre tests ni entre ejecuciones locales.
 
+const ALL_VARS = [
+  "DISCORD_BOT_TOKEN",
+  "DISCORD_GUILD_ID",
+  "DISCORD_EVENTS_CHANNEL_ID",
+  "PORT",
+  "API_BASE_URL",
+  "HTTP_TIMEOUT_MS",
+] as const;
+
+function setBaseValid(): void {
+  process.env.DISCORD_BOT_TOKEN = "fake-token";
+  process.env.DISCORD_GUILD_ID = "123456789012345678";
+  process.env.DISCORD_EVENTS_CHANNEL_ID = "987654321098765432";
+  process.env.PORT = "4000";
+  process.env.API_BASE_URL = "http://api:3000";
+}
+
 describe("loadConfig", () => {
   let saved: NodeJS.ProcessEnv;
 
   beforeEach(() => {
     saved = { ...process.env };
-    for (const k of [
-      "DISCORD_BOT_TOKEN",
-      "DISCORD_GUILD_ID",
-      "DISCORD_EVENTS_CHANNEL_ID",
-      "PORT",
-    ]) {
+    for (const k of ALL_VARS) {
       delete process.env[k];
     }
   });
@@ -25,51 +37,65 @@ describe("loadConfig", () => {
   });
 
   it("acepta configuracion completa y valida", () => {
-    process.env.DISCORD_BOT_TOKEN = "fake-token";
-    process.env.DISCORD_GUILD_ID = "123456789012345678";
-    process.env.DISCORD_EVENTS_CHANNEL_ID = "987654321098765432";
-    process.env.PORT = "4000";
+    setBaseValid();
 
     const config = loadConfig();
     expect(config.discord.token).toBe("fake-token");
     expect(config.discord.guildId).toBe("123456789012345678");
     expect(config.discord.eventsChannelId).toBe("987654321098765432");
     expect(config.server.port).toBe(4000);
+    expect(config.eventStore.baseUrl).toBe("http://api:3000");
+    // HTTP_TIMEOUT_MS ausente -> default 10 s.
+    expect(config.eventStore.timeoutMs).toBe(10_000);
+  });
+
+  it("acepta HTTP_TIMEOUT_MS custom cuando es entero positivo", () => {
+    setBaseValid();
+    process.env.HTTP_TIMEOUT_MS = "30000";
+
+    const config = loadConfig();
+    expect(config.eventStore.timeoutMs).toBe(30_000);
   });
 
   it("aborta con mensaje claro cuando falta una variable requerida", () => {
-    process.env.DISCORD_GUILD_ID = "g";
-    process.env.DISCORD_EVENTS_CHANNEL_ID = "c";
-    process.env.PORT = "4000";
-    // DISCORD_BOT_TOKEN ausente
+    setBaseValid();
+    delete process.env.DISCORD_BOT_TOKEN;
 
     expect(() => loadConfig()).toThrow(/DISCORD_BOT_TOKEN/);
   });
 
   it("aborta cuando una variable esta vacia", () => {
+    setBaseValid();
     process.env.DISCORD_BOT_TOKEN = "   ";
-    process.env.DISCORD_GUILD_ID = "g";
-    process.env.DISCORD_EVENTS_CHANNEL_ID = "c";
-    process.env.PORT = "4000";
 
     expect(() => loadConfig()).toThrow(/DISCORD_BOT_TOKEN/);
   });
 
   it("aborta cuando PORT no es un entero valido", () => {
-    process.env.DISCORD_BOT_TOKEN = "t";
-    process.env.DISCORD_GUILD_ID = "g";
-    process.env.DISCORD_EVENTS_CHANNEL_ID = "c";
+    setBaseValid();
     process.env.PORT = "no-es-numero";
 
     expect(() => loadConfig()).toThrow(/PORT invalido/);
   });
 
   it("aborta cuando PORT esta fuera de rango", () => {
-    process.env.DISCORD_BOT_TOKEN = "t";
-    process.env.DISCORD_GUILD_ID = "g";
-    process.env.DISCORD_EVENTS_CHANNEL_ID = "c";
+    setBaseValid();
     process.env.PORT = "99999";
 
     expect(() => loadConfig()).toThrow(/PORT invalido/);
+  });
+
+  it("aborta cuando API_BASE_URL no es URL valida", () => {
+    setBaseValid();
+    process.env.API_BASE_URL = "no es una url";
+
+    expect(() => loadConfig()).toThrow(/API_BASE_URL invalida/);
+  });
+
+  it("aborta cuando HTTP_TIMEOUT_MS no es entero positivo", () => {
+    setBaseValid();
+    process.env.HTTP_TIMEOUT_MS = "-1";
+
+    expect(() => loadConfig()).toThrow(/HTTP_TIMEOUT_MS invalido/);
   });
 });
