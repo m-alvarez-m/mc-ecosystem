@@ -23,6 +23,9 @@ export interface Config {
   cursor: {
     filePath: string;
   };
+  polling: {
+    intervalMs: number;
+  };
 }
 
 interface RequiredVar {
@@ -37,6 +40,7 @@ const REQUIRED: RequiredVar[] = [
   { key: "PORT", description: "Puerto HTTP para el endpoint /health" },
   { key: "API_BASE_URL", description: "URL base de la api del Event Store (p.ej. http://api:3000)" },
   { key: "CURSOR_FILE", description: "Ruta al archivo JSON de persistencia del cursor" },
+  { key: "POLL_INTERVAL_MS", description: "Intervalo entre iteraciones del polling engine (entero positivo, en ms)" },
 ];
 
 // Default 10 s: cubre latencia local (compose network, sub-milisegundo)
@@ -84,6 +88,14 @@ export function loadConfig(): Config {
     timeoutMs = parsed;
   }
 
+  const rawPollInterval = process.env.POLL_INTERVAL_MS!;
+  const pollIntervalMs = Number(rawPollInterval);
+  if (!Number.isInteger(pollIntervalMs) || pollIntervalMs <= 0) {
+    throw new Error(
+      `POLL_INTERVAL_MS invalido: "${rawPollInterval}" (debe ser entero positivo, en ms)`,
+    );
+  }
+
   return {
     discord: {
       token: process.env.DISCORD_BOT_TOKEN!,
@@ -93,5 +105,6 @@ export function loadConfig(): Config {
     server: { port },
     eventStore: { baseUrl: rawBaseUrl, timeoutMs },
     cursor: { filePath: process.env.CURSOR_FILE! },
+    polling: { intervalMs: pollIntervalMs },
   };
 }

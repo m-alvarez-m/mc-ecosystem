@@ -13,6 +13,7 @@ const ALL_VARS = [
   "API_BASE_URL",
   "HTTP_TIMEOUT_MS",
   "CURSOR_FILE",
+  "POLL_INTERVAL_MS",
 ] as const;
 
 function setBaseValid(): void {
@@ -22,6 +23,7 @@ function setBaseValid(): void {
   process.env.PORT = "4000";
   process.env.API_BASE_URL = "http://api:3000";
   process.env.CURSOR_FILE = "/var/lib/pulso/cursor.json";
+  process.env.POLL_INTERVAL_MS = "5000";
 }
 
 describe("loadConfig", () => {
@@ -50,6 +52,7 @@ describe("loadConfig", () => {
     // HTTP_TIMEOUT_MS ausente -> default 10 s.
     expect(config.eventStore.timeoutMs).toBe(10_000);
     expect(config.cursor.filePath).toBe("/var/lib/pulso/cursor.json");
+    expect(config.polling.intervalMs).toBe(5000);
   });
 
   it("acepta HTTP_TIMEOUT_MS custom cuando es entero positivo", () => {
@@ -100,5 +103,12 @@ describe("loadConfig", () => {
     process.env.HTTP_TIMEOUT_MS = "-1";
 
     expect(() => loadConfig()).toThrow(/HTTP_TIMEOUT_MS invalido/);
+  });
+
+  it("aborta cuando POLL_INTERVAL_MS no es entero positivo", () => {
+    setBaseValid();
+    process.env.POLL_INTERVAL_MS = "0";
+
+    expect(() => loadConfig()).toThrow(/POLL_INTERVAL_MS invalido/);
   });
 });
