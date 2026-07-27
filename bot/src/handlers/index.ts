@@ -4,3 +4,4 @@
 
 export { ServerStartedHandler } from "./server-started-handler";
 export { ServerStoppedHandler } from "./server-stopped-handler";
+export { PlayerJoinedHandler, MissingPlayerNameError } from "./player-joined-handler";
