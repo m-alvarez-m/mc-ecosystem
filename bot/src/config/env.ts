@@ -1,0 +1,63 @@
+import "dotenv/config";
+
+// Configuracion del bot Pulso (v1.1).
+//
+// Contrato: fallar rapido y ruidoso si falta cualquier variable
+// requerida. Sin fallbacks silenciosos. Sin lecturas desde otros
+// sitios: solo variables de entorno. Los secretos vienen del .env
+// local (dev) o inyectados por Docker Compose desde infra/.env (deploy).
+
+export interface Config {
+  discord: {
+    token: string;
+    guildId: string;
+    eventsChannelId: string;
+  };
+  server: {
+    port: number;
+  };
+}
+
+interface RequiredVar {
+  key: string;
+  description: string;
+}
+
+const REQUIRED: RequiredVar[] = [
+  { key: "DISCORD_BOT_TOKEN", description: "Token del bot (Discord Developer Portal)" },
+  { key: "DISCORD_GUILD_ID", description: "ID numerico del servidor Discord destino" },
+  { key: "DISCORD_EVENTS_CHANNEL_ID", description: "ID del canal donde el bot publica" },
+  { key: "PORT", description: "Puerto HTTP para el endpoint /health" },
+];
+
+export function loadConfig(): Config {
+  const missing: string[] = [];
+  for (const v of REQUIRED) {
+    const value = process.env[v.key];
+    if (value === undefined || value.trim().length === 0) {
+      missing.push(`  - ${v.key}  (${v.description})`);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      "Variables de entorno faltantes o vacias:\n" +
+        missing.join("\n") +
+        "\n\nDefinelas en bot/.env (dev) o en infra/.env (deploy)."
+    );
+  }
+
+  const rawPort = process.env.PORT!;
+  const port = Number(rawPort);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error(`PORT invalido: "${rawPort}" (debe ser entero 1-65535)`);
+  }
+
+  return {
+    discord: {
+      token: process.env.DISCORD_BOT_TOKEN!,
+      guildId: process.env.DISCORD_GUILD_ID!,
+      eventsChannelId: process.env.DISCORD_EVENTS_CHANNEL_ID!,
+    },
+    server: { port },
+  };
+}
