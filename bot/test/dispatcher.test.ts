@@ -7,10 +7,12 @@ import {
   InvalidHandlerError,
 } from "../src/dispatcher/errors";
 import type { EventRecord } from "../src/eventstore";
+import type { DispatchContext } from "../src/context";
+import type { Publisher } from "../src/publisher";
 
 // Tests del EventDispatcher.
 // Sin mocks del polling engine ni de Discord: el dispatcher es
-// completamente autonomo y solo maneja handlers fake locales.
+// completamente autonomo. Usa fakes de Publisher y DispatchContext.
 
 function fakeEvent(id: string, type: string): EventRecord {
   return {
@@ -30,12 +32,26 @@ function fakeEvent(id: string, type: string): EventRecord {
 }
 
 /**
+ * Fake publisher: contrato Publisher cumplido con vi.fn() para
+ * introspeccion. Ningun side effect real (no red, no disco).
+ */
+function fakePublisher(): Publisher & { publish: ReturnType<typeof vi.fn> } {
+  return {
+    publish: vi.fn(async () => undefined),
+  };
+}
+
+function fakeContext(publisher?: Publisher): DispatchContext {
+  return { publisher: publisher ?? fakePublisher() };
+}
+
+/**
  * Factory de handlers fake. `types` = a que tipos responde supports().
  * `handle` es opcional: por defecto no hace nada.
  */
 function fakeHandler(
   types: readonly string[],
-  handle?: (event: EventRecord) => Promise<void>,
+  handle?: (ctx: DispatchContext, event: EventRecord) => Promise<void>,
 ): EventHandler {
   return {
     supports: (t: string) => types.includes(t),
@@ -49,9 +65,11 @@ function sleep(ms: number): Promise<void> {
 
 describe("EventDispatcher", () => {
   let dispatcher: EventDispatcher;
+  let context: DispatchContext;
 
   beforeEach(() => {
-    dispatcher = new EventDispatcher();
+    context = fakeContext();
+    dispatcher = new EventDispatcher({ context });
   });
 
   it("register + dispatch: invoca el handler correcto", async () => {
@@ -61,7 +79,72 @@ describe("EventDispatcher", () => {
     await dispatcher.dispatch([fakeEvent("1", "session.start")]);
 
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0]![0].id).toBe("1");
+    // La firma nueva pasa (context, event); event queda como segundo argumento.
+    expect(spy.mock.calls[0]![1].id).toBe("1");
+  });
+
+  it("dispatch entrega el mismo DispatchContext al handler", async () => {
+    const receivedContexts: DispatchContext[] = [];
+    dispatcher.register(
+      "session.start",
+      fakeHandler(["session.start"], async (ctx) => {
+        receivedContexts.push(ctx);
+      }),
+    );
+
+    await dispatcher.dispatch([fakeEvent("1", "session.start")]);
+
+    expect(receivedContexts).toHaveLength(1);
+    // Identidad referencial: es la MISMA instancia que se paso al constructor.
+    expect(receivedContexts[0]).toBe(context);
+  });
+
+  it("mismo contexto reutilizado para multiples eventos", async () => {
+    const receivedContexts: DispatchContext[] = [];
+    dispatcher.register(
+      "a",
+      fakeHandler(["a"], async (ctx) => {
+        receivedContexts.push(ctx);
+      }),
+    );
+    dispatcher.register(
+      "b",
+      fakeHandler(["b"], async (ctx) => {
+        receivedContexts.push(ctx);
+      }),
+    );
+
+    await dispatcher.dispatch([
+      fakeEvent("1", "a"),
+      fakeEvent("2", "b"),
+      fakeEvent("3", "a"),
+    ]);
+
+    expect(receivedContexts).toHaveLength(3);
+    // Los tres son la MISMA referencia; el dispatcher no clona ni deriva.
+    expect(receivedContexts[0]).toBe(context);
+    expect(receivedContexts[1]).toBe(context);
+    expect(receivedContexts[2]).toBe(context);
+  });
+
+  it("Publisher se puede reemplazar por un fake sin tocar handlers", async () => {
+    const publisher = fakePublisher();
+    const customContext: DispatchContext = { publisher };
+    const d = new EventDispatcher({ context: customContext });
+
+    d.register(
+      "greet",
+      fakeHandler(["greet"], async (ctx, event) => {
+        // El handler solo depende de la interfaz Publisher.
+        await ctx.publisher.publish({ title: "hola", body: event.id });
+      }),
+    );
+
+    await d.dispatch([fakeEvent("1", "greet"), fakeEvent("2", "greet")]);
+
+    expect(publisher.publish).toHaveBeenCalledTimes(2);
+    expect(publisher.publish.mock.calls[0]![0]).toEqual({ title: "hola", body: "1" });
+    expect(publisher.publish.mock.calls[1]![0]).toEqual({ title: "hola", body: "2" });
   });
 
   it("register duplicado: lanza DuplicateHandlerError", () => {
@@ -72,7 +155,6 @@ describe("EventDispatcher", () => {
   });
 
   it("register de handler que no soporta el tipo: InvalidHandlerError", () => {
-    // supports() devuelve false para el tipo bajo el que se intenta registrar.
     expect(() =>
       dispatcher.register("session.start", fakeHandler(["block.break"])),
     ).toThrow(InvalidHandlerError);
@@ -113,12 +195,12 @@ describe("EventDispatcher", () => {
     ).resolves.toBeUndefined();
 
     expect(knownSpy).toHaveBeenCalledTimes(1);
-    expect(knownSpy.mock.calls[0]![0].id).toBe("2");
+    expect(knownSpy.mock.calls[0]![1].id).toBe("2");
   });
 
   it("evento sin handler: invoca onUnknown si esta configurado", async () => {
     const onUnknown = vi.fn();
-    const d = new EventDispatcher({ onUnknown });
+    const d = new EventDispatcher({ context, onUnknown });
     d.register("session.start", fakeHandler(["session.start"]));
 
     await d.dispatch([
@@ -136,7 +218,7 @@ describe("EventDispatcher", () => {
     const onUnknown = vi.fn(() => {
       throw new Error("observador roto");
     });
-    const d = new EventDispatcher({ onUnknown });
+    const d = new EventDispatcher({ context, onUnknown });
 
     await expect(
       d.dispatch([fakeEvent("1", "tipo.desconocido")]),
@@ -170,7 +252,7 @@ describe("EventDispatcher", () => {
 
     // Solo el primero se proceso; el tercero NO por la abortacion.
     expect(goodSpy).toHaveBeenCalledTimes(1);
-    expect(goodSpy.mock.calls[0]![0].id).toBe("1");
+    expect(goodSpy.mock.calls[0]![1].id).toBe("1");
   });
 
   it("procesamiento secuencial: nunca dos handlers concurrentes", async () => {
@@ -199,13 +281,13 @@ describe("EventDispatcher", () => {
     const seen: string[] = [];
     dispatcher.register(
       "a",
-      fakeHandler(["a"], async (e) => {
+      fakeHandler(["a"], async (_ctx, e) => {
         seen.push(`a:${e.id}`);
       }),
     );
     dispatcher.register(
       "b",
-      fakeHandler(["b"], async (e) => {
+      fakeHandler(["b"], async (_ctx, e) => {
         seen.push(`b:${e.id}`);
       }),
     );

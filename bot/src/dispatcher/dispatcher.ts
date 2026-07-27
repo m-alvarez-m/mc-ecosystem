@@ -1,12 +1,15 @@
 import type { EventRecord } from "../eventstore";
+import type { DispatchContext } from "../context";
 import type { EventHandler } from "./handler";
 import type { OnUnknownEventCallback } from "./types";
 import { HandlerRegistry } from "./registry";
 import { HandlerExecutionError } from "./errors";
 
 // EventDispatcher: recibe lotes de eventos del polling engine, los
-// enruta secuencialmente al handler correspondiente segun su `type`,
-// se detiene si un handler lanza (para que el polling engine no
+// enruta secuencialmente al handler correspondiente segun su `type`
+// y entrega a cada handler el DispatchContext ademas del evento.
+//
+// Se detiene si un handler lanza (para que el polling engine no
 // avance el cursor), e ignora silenciosamente eventos sin handler
 // (con hook opcional para observabilidad futura).
 //
@@ -17,8 +20,18 @@ import { HandlerExecutionError } from "./errors";
 // - Orden preservado: el handler N se ejecuta despues del N-1.
 // - Un handler que lanza aborta el lote inmediatamente.
 // - Eventos sin handler no cuentan como error: se saltan.
+// - El MISMO objeto de contexto se entrega a todos los handlers de
+//   todos los lotes que procese esta instancia del dispatcher (una
+//   instancia = un contexto de vida del proceso, tipicamente).
 
 export interface EventDispatcherOptions {
+  /**
+   * Servicios compartidos que se entregan a cada handler. La misma
+   * referencia se pasa en cada llamada a handler.handle(); si
+   * el contexto tiene estado mutable, se comparte entre handlers.
+   */
+  context: DispatchContext;
+
   /**
    * Callback opcional invocado cada vez que llega un evento cuyo
    * `type` no tiene handler registrado. Es un hook de observabilidad,
@@ -31,9 +44,11 @@ export interface EventDispatcherOptions {
 
 export class EventDispatcher {
   private readonly registry = new HandlerRegistry();
+  private readonly context: DispatchContext;
   private readonly onUnknown?: OnUnknownEventCallback;
 
-  constructor(options: EventDispatcherOptions = {}) {
+  constructor(options: EventDispatcherOptions) {
+    this.context = options.context;
     this.onUnknown = options.onUnknown;
   }
 
@@ -56,8 +71,8 @@ export class EventDispatcher {
    * Procesa `events` en orden, uno por uno. Para cada evento:
    * - resuelve su handler por tipo;
    * - si no hay handler: invoca onUnknown (si esta) y continua;
-   * - si hay: await handler.handle(event); si lanza, aborta el lote
-   *   con HandlerExecutionError.
+   * - si hay: await handler.handle(context, event); si lanza, aborta
+   *   el lote con HandlerExecutionError.
    *
    * NUNCA paraleliza (nada de Promise.all). Nunca reordena. Nunca
    * transforma. La entrega al polling engine es at-least-once: este
@@ -80,7 +95,7 @@ export class EventDispatcher {
         continue;
       }
       try {
-        await handler.handle(event);
+        await handler.handle(this.context, event);
       } catch (err) {
         throw new HandlerExecutionError(event.type, event.id, errCause(err));
       }
