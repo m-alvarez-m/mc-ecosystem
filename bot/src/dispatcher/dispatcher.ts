@@ -1,0 +1,97 @@
+import type { EventRecord } from "../eventstore";
+import type { EventHandler } from "./handler";
+import type { OnUnknownEventCallback } from "./types";
+import { HandlerRegistry } from "./registry";
+import { HandlerExecutionError } from "./errors";
+
+// EventDispatcher: recibe lotes de eventos del polling engine, los
+// enruta secuencialmente al handler correspondiente segun su `type`,
+// se detiene si un handler lanza (para que el polling engine no
+// avance el cursor), e ignora silenciosamente eventos sin handler
+// (con hook opcional para observabilidad futura).
+//
+// El dispatcher NO conoce Discord ni Minecraft. Solo enruta.
+//
+// Invariantes:
+// - Procesamiento SIEMPRE secuencial. Sin Promise.all. Sin fan-out.
+// - Orden preservado: el handler N se ejecuta despues del N-1.
+// - Un handler que lanza aborta el lote inmediatamente.
+// - Eventos sin handler no cuentan como error: se saltan.
+
+export interface EventDispatcherOptions {
+  /**
+   * Callback opcional invocado cada vez que llega un evento cuyo
+   * `type` no tiene handler registrado. Es un hook de observabilidad,
+   * no de logueo: el dispatcher no imprime. Si onUnknown lanza, el
+   * dispatcher lo swallow (la observabilidad no debe romper el
+   * procesamiento del lote).
+   */
+  onUnknown?: OnUnknownEventCallback;
+}
+
+export class EventDispatcher {
+  private readonly registry = new HandlerRegistry();
+  private readonly onUnknown?: OnUnknownEventCallback;
+
+  constructor(options: EventDispatcherOptions = {}) {
+    this.onUnknown = options.onUnknown;
+  }
+
+  /** Registra `handler` bajo `eventType`. Ver HandlerRegistry.register. */
+  register(eventType: string, handler: EventHandler): void {
+    this.registry.register(eventType, handler);
+  }
+
+  /** Elimina el handler de `eventType`. Devuelve si habia uno. */
+  unregister(eventType: string): boolean {
+    return this.registry.unregister(eventType);
+  }
+
+  /** Vacia todos los handlers registrados. */
+  clear(): void {
+    this.registry.clear();
+  }
+
+  /**
+   * Procesa `events` en orden, uno por uno. Para cada evento:
+   * - resuelve su handler por tipo;
+   * - si no hay handler: invoca onUnknown (si esta) y continua;
+   * - si hay: await handler.handle(event); si lanza, aborta el lote
+   *   con HandlerExecutionError.
+   *
+   * NUNCA paraleliza (nada de Promise.all). Nunca reordena. Nunca
+   * transforma. La entrega al polling engine es at-least-once: este
+   * dispatcher garantiza el orden intra-lote y la para-ante-fallo,
+   * pero no la unicidad global — eso es del pipeline.
+   */
+  async dispatch(events: readonly EventRecord[]): Promise<void> {
+    for (const event of events) {
+      const handler = this.registry.find(event.type);
+      if (handler === undefined) {
+        // Evento desconocido: se salta silenciosamente. Hook opcional
+        // para observabilidad, sin logs propios.
+        if (this.onUnknown !== undefined) {
+          try {
+            this.onUnknown(event);
+          } catch {
+            /* swallow: el observador no debe romper el dispatch */
+          }
+        }
+        continue;
+      }
+      try {
+        await handler.handle(event);
+      } catch (err) {
+        throw new HandlerExecutionError(event.type, event.id, errCause(err));
+      }
+    }
+  }
+}
+
+// --------------------------------------------------------------------
+// Helpers
+// --------------------------------------------------------------------
+
+function errCause(err: unknown): ErrorOptions | undefined {
+  return err instanceof Error ? { cause: err } : undefined;
+}
