@@ -5,3 +5,10 @@
 export { ServerStartedHandler } from "./server-started-handler";
 export { ServerStoppedHandler } from "./server-stopped-handler";
 export { PlayerJoinedHandler, MissingPlayerNameError } from "./player-joined-handler";
+export {
+  PlayerLeftHandler,
+  // Alias por colision de nombre con la de player-joined: ambos handlers
+  // definen su propio error tipado con el mismo problema semantico. El
+  // consumidor que necesita catch especifico importa desde el barrel.
+  MissingPlayerNameError as PlayerLeftMissingNameError,
+} from "./player-left-handler";
