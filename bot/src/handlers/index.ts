@@ -12,3 +12,8 @@ export {
   // consumidor que necesita catch especifico importa desde el barrel.
   MissingPlayerNameError as PlayerLeftMissingNameError,
 } from "./player-left-handler";
+export {
+  PlayerDeathHandler,
+  // Alias por la misma razon: el handler define su propio MissingPlayerNameError.
+  MissingPlayerNameError as PlayerDeathMissingNameError,
+} from "./player-death-handler";
