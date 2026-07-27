@@ -3,3 +3,4 @@
 // el dispatcher y se registran los handlers) importan desde aqui.
 
 export { ServerStartedHandler } from "./server-started-handler";
+export { ServerStoppedHandler } from "./server-stopped-handler";
