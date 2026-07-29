@@ -1,50 +1,150 @@
-import pino from "pino";
+import pino, { type Logger } from "pino";
+import type { Server } from "node:http";
 import { loadConfig } from "./config/env";
-import { createDiscordClient } from "./discord/client";
+import { composeApp, type App } from "./bootstrap";
 import { startHealthServer } from "./health/server";
-import { registerShutdownHandlers } from "./lifecycle/shutdown";
 
-// Bootstrap del servicio Pulso (v1.1).
+// Entry point del servicio Pulso.
 //
-// Alcance de esta version: el servicio arranca, valida config, se
-// conecta a Discord, expone /health y espera senales. NO consume
-// eventos, NO postea mensajes, NO registra slash commands, NO hace
-// polling. La logica de negocio (polling con cursor por id, ver
-// ADR-010) llega en sesiones posteriores del roadmap Pulso.
+// Responsabilidad: cargar config, componer la app via composeApp(),
+// exponer el health endpoint que ya existia, registrar handlers de
+// senal, y arrancar. Los detalles de la app compuesta viven en el
+// modulo bootstrap; aqui solo orquestamos el ciclo de vida del proceso.
 //
-// Referencias:
-// - ADR-008: Node.js + TypeScript + discord.js v14
-// - ADR-009: api HTTP como superficie unica de la DB
-// - ADR-010: consumo del Event Store con cursor por id
+// El health server permanece en este entry point (no en composeApp)
+// porque tecnicamente es infraestructura de proceso, no del "bot" en
+// si — Docker healthcheck depende de el aunque la app compuesta
+// tuviera un fallo severo.
+//
+// main() se exporta para permitir tests con dependencias inyectadas;
+// el auto-run al final del archivo solo dispara cuando el proceso
+// ejecuta directamente este modulo, no cuando lo importa un test.
 
-const logger = pino({ name: "pulso" });
+/**
+ * Dependencias inyectables de main(). Todas opcionales: en produccion
+ * se resuelven a las implementaciones reales; los tests inyectan
+ * fakes para verificar comportamiento sin tocar Discord, filesystem,
+ * red, ni el proceso real.
+ */
+export interface MainDependencies {
+  loadConfig?: typeof loadConfig;
+  composeApp?: typeof composeApp;
+  startHealthServer?: typeof startHealthServer;
+  logger?: Logger;
+  processExit?: (code: number) => never;
+  registerSignal?: (
+    signal: "SIGINT" | "SIGTERM",
+    handler: () => void,
+  ) => void;
+}
 
-async function main(): Promise<void> {
+/**
+ * Resultado exitoso de main(). Se devuelve para tests que quieran
+ * inspeccionar la app y el server tras el arranque. En produccion,
+ * despues de que main() resuelve, el proceso se queda vivo por el
+ * event loop (polling engine + HTTP server + Discord client).
+ */
+export interface RunningApp {
+  app: App;
+  server: Server;
+}
+
+/**
+ * Orquesta el ciclo de vida completo: config -> compose -> health ->
+ * signals -> start. Devuelve el handle en exito; llama processExit(1)
+ * y no vuelve nunca en fallo (config invalida o start rechazado).
+ */
+export async function main(
+  deps: MainDependencies = {},
+): Promise<RunningApp | never> {
+  const logger = deps.logger ?? pino({ name: "pulso" });
+  const loadConfigFn = deps.loadConfig ?? loadConfig;
+  const composeAppFn = deps.composeApp ?? composeApp;
+  const startHealthServerFn = deps.startHealthServer ?? startHealthServer;
+  const exit =
+    deps.processExit ??
+    ((code: number): never => {
+      process.exit(code);
+    });
+  const registerSignal =
+    deps.registerSignal ??
+    ((signal, handler): void => {
+      process.once(signal, handler);
+    });
+
   logger.info("Inicio del bot Pulso");
 
+  // 1) Config. Si falla: exit(1) sin componer nada mas.
   let config: ReturnType<typeof loadConfig>;
   try {
-    config = loadConfig();
+    config = loadConfigFn();
     logger.info("Configuracion valida");
   } catch (err) {
     logger.fatal({ err }, "Configuracion invalida, abortando");
-    process.exit(1);
+    return exit(1);
   }
 
-  const client = createDiscordClient(logger);
-  const server = startHealthServer({ client, port: config.server.port, logger });
+  // 2) Composicion del grafo. Puro y sincronico: no toca IO.
+  const app = composeAppFn(config);
 
-  registerShutdownHandlers({ client, server, logger });
+  // 3) Health server. Usa el MISMO Discord client que la app compuesta
+  //    (via app.services.client) — evita duplicar clientes y refleja
+  //    el estado real del bot en /health.
+  const server = startHealthServerFn({
+    client: app.services.client,
+    port: config.server.port,
+    logger,
+  });
 
-  logger.info("Iniciando login a Discord");
+  // 4) Shutdown: SIGINT / SIGTERM -> app.stop() + server.close() -> exit(0).
+  //    Inline aqui porque el ciclo depende de app + server (el modulo
+  //    lifecycle/shutdown fue disenado para el bootstrap previo con
+  //    solo client + server; adaptarlo esta fuera de scope de esta sesion).
+  let shuttingDown = false;
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ signal }, "Senal recibida, cerrando ordenadamente");
+    try {
+      await app.stop();
+      await new Promise<void>((resolve, reject) =>
+        server.close((err) => (err ? reject(err) : resolve())),
+      );
+      logger.info("Shutdown limpio completado");
+      exit(0);
+    } catch (err) {
+      logger.error({ err }, "Error durante shutdown");
+      exit(1);
+    }
+  };
+  registerSignal("SIGINT", () => {
+    void shutdown("SIGINT");
+  });
+  registerSignal("SIGTERM", () => {
+    void shutdown("SIGTERM");
+  });
+
+  // 5) Arranque. Si login Discord o polling.start() fallan, cerramos
+  //    el health server (best effort) y exit(1).
   try {
-    await client.login(config.discord.token);
-    // El "ready" se loguea desde createDiscordClient. login() solo
-    // confirma que el token fue aceptado y la conexion arranco.
+    await app.start();
+    logger.info("Bot Pulso arrancado");
+    return { app, server };
   } catch (err) {
-    logger.fatal({ err }, "Fallo el login a Discord");
-    process.exit(1);
+    logger.fatal({ err }, "Fallo el arranque de la app");
+    try {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    } catch {
+      /* best effort: shutdown de emergencia */
+    }
+    return exit(1);
   }
 }
 
-void main();
+// Auto-run cuando este archivo se ejecuta directamente por Node (o
+// tsx). Cuando un test lo IMPORTA, require.main es el runner de
+// vitest, no este modulo, y main() no se dispara — el test lo llama
+// explicitamente con sus dependencias inyectadas.
+if (require.main === module) {
+  void main();
+}
