@@ -25,7 +25,7 @@ app.get("/pack.zip", async (_request, reply) => {
   return reply.type("application/zip").send(createReadStream(PACK_PATH));
 });
 
-app.register(eventRoutes);
+app.register(eventRoutes, { pool });
 
 app.listen({ port: 3000, host: "0.0.0.0" }).catch((err) => {
   app.log.error(err);
