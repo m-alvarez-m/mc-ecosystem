@@ -17,3 +17,8 @@ export {
   // Alias por la misma razon: el handler define su propio MissingPlayerNameError.
   MissingPlayerNameError as PlayerDeathMissingNameError,
 } from "./player-death-handler";
+export {
+  AdvancementHandler,
+  MissingPlayerNameError as AdvancementMissingNameError,
+  MissingAdvancementNameError,
+} from "./advancement-handler";
