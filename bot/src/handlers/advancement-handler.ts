@@ -14,7 +14,7 @@ import { MissingPlayerNameError } from "./errors";
 // al dispatcher antes que un mensaje corrupto en Discord ("undefined
 // ha conseguido el avance: undefined.").
 
-const EVENT_TYPE = "player.advancement";
+const EVENT_TYPE = "advancement.done";
 
 const TITLE = "Nuevo avance";
 
@@ -27,7 +27,7 @@ export class MissingAdvancementNameError extends Error {
 
   constructor(public readonly eventUuid: string) {
     super(
-      `player.advancement sin campo data.advancement valido (event_uuid=${eventUuid})`,
+      `advancement.done sin campo data.advancement valido (event_uuid=${eventUuid})`,
     );
     this.name = "MissingAdvancementNameError";
   }

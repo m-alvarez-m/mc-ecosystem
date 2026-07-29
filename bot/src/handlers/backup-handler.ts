@@ -14,7 +14,7 @@ import type { EventRecord } from "../eventstore";
 // o fallo) viaja en el body, junto con tipo y tamano. No se
 // interpreta ni transforma nada mas alla de eso.
 
-const EVENT_TYPE = "server.backup";
+const EVENT_TYPE = "backup.done";
 
 const TITLE = "Respaldo completado";
 
@@ -31,7 +31,7 @@ export class InvalidBackupPayloadError extends Error {
     public readonly reason: string,
   ) {
     super(
-      `server.backup con payload invalido (${reason}, event_uuid=${eventUuid})`,
+      `backup.done con payload invalido (${reason}, event_uuid=${eventUuid})`,
     );
     this.name = "InvalidBackupPayloadError";
   }

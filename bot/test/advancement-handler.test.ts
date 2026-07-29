@@ -26,7 +26,7 @@ function advancementEvent(
   return {
     id: "42",
     event_uuid: `00000000-0000-4000-8000-${uuid.padStart(12, "0")}`,
-    type: "player.advancement",
+    type: "advancement.done",
     v: 1,
     ts: "2026-07-27T00:00:00.000Z",
     received_at: "2026-07-27T00:00:00.010Z",
@@ -40,13 +40,13 @@ function advancementEvent(
 }
 
 describe("AdvancementHandler", () => {
-  it("supports('player.advancement') true; otros false", () => {
+  it("supports('advancement.done') true; otros false", () => {
     const h = new AdvancementHandler();
-    expect(h.supports("player.advancement")).toBe(true);
-    expect(h.supports("advancement.done")).toBe(false); // el del catalogo real
+    expect(h.supports("advancement.done")).toBe(true);
+    expect(h.supports("milestone.first")).toBe(false);
     expect(h.supports("player.death")).toBe(false);
     expect(h.supports("")).toBe(false);
-    expect(h.supports("PLAYER.ADVANCEMENT")).toBe(false);
+    expect(h.supports("ADVANCEMENT.DONE")).toBe(false);
   });
 
   it("publicacion correcta con jugador y avance", async () => {
@@ -163,7 +163,7 @@ describe("AdvancementHandler", () => {
     expect(publisher.publish).not.toHaveBeenCalled();
   });
 
-  it("errores incluyen event_uuid y mencionan player.advancement", async () => {
+  it("errores incluyen event_uuid y mencionan advancement.done", async () => {
     const h = new AdvancementHandler();
 
     const eventA = advancementEvent({ advancement: "X" }, "aaaa1111aaaa");
@@ -172,7 +172,7 @@ describe("AdvancementHandler", () => {
       .catch((e) => e);
     expect(errA).toBeInstanceOf(MissingPlayerNameError);
     expect((errA as MissingPlayerNameError).eventUuid).toBe(eventA.event_uuid);
-    expect((errA as MissingPlayerNameError).message).toContain("player.advancement");
+    expect((errA as MissingPlayerNameError).message).toContain("advancement.done");
 
     const eventB = advancementEvent({ name: "V" }, "bbbb2222bbbb");
     const errB = await h
@@ -180,7 +180,7 @@ describe("AdvancementHandler", () => {
       .catch((e) => e);
     expect(errB).toBeInstanceOf(MissingAdvancementNameError);
     expect((errB as MissingAdvancementNameError).eventUuid).toBe(eventB.event_uuid);
-    expect((errB as MissingAdvancementNameError).message).toContain("player.advancement");
+    expect((errB as MissingAdvancementNameError).message).toContain("advancement.done");
   });
 
   it("publisher llamado exactamente una vez en caso feliz", async () => {

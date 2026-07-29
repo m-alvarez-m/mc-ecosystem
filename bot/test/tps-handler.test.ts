@@ -19,7 +19,7 @@ function tpsEvent(data: Record<string, unknown>, uuid = "aaaa"): EventRecord {
   return {
     id: "42",
     event_uuid: `00000000-0000-4000-8000-${uuid.padStart(12, "0")}`,
-    type: "server.tps",
+    type: "server.tps_sample",
     v: 1,
     ts: "2026-07-27T00:00:00.000Z",
     received_at: "2026-07-27T00:00:00.010Z",
@@ -33,13 +33,13 @@ function tpsEvent(data: Record<string, unknown>, uuid = "aaaa"): EventRecord {
 }
 
 describe("TpsHandler", () => {
-  it("supports('server.tps') true; otros false", () => {
+  it("supports('server.tps_sample') true; otros false", () => {
     const h = new TpsHandler();
-    expect(h.supports("server.tps")).toBe(true);
-    expect(h.supports("server.tps_sample")).toBe(false); // el del catalogo real
+    expect(h.supports("server.tps_sample")).toBe(true);
     expect(h.supports("server.start")).toBe(false);
+    expect(h.supports("session.start")).toBe(false);
     expect(h.supports("")).toBe(false);
-    expect(h.supports("SERVER.TPS")).toBe(false);
+    expect(h.supports("SERVER.TPS_SAMPLE")).toBe(false);
   });
 
   it("publicacion correcta con TPS entero: '<title>' + 'TPS actual: 20'", async () => {
@@ -131,7 +131,7 @@ describe("TpsHandler", () => {
     expect(publisher.publish).not.toHaveBeenCalled();
   });
 
-  it("InvalidTpsError incluye event_uuid y menciona server.tps", async () => {
+  it("InvalidTpsError incluye event_uuid y menciona server.tps_sample", async () => {
     const h = new TpsHandler();
     const event = tpsEvent({}, "cafecafecafe");
     const err = await h
@@ -140,7 +140,7 @@ describe("TpsHandler", () => {
     expect(err).toBeInstanceOf(InvalidTpsError);
     expect((err as InvalidTpsError).eventUuid).toBe(event.event_uuid);
     expect((err as InvalidTpsError).code).toBe("INVALID_TPS");
-    expect((err as InvalidTpsError).message).toContain("server.tps");
+    expect((err as InvalidTpsError).message).toContain("server.tps_sample");
   });
 
   it("publisher llamado exactamente una vez en caso feliz", async () => {

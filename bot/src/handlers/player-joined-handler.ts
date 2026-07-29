@@ -13,7 +13,9 @@ import { MissingPlayerNameError } from "./errors";
 // al dispatcher que un mensaje "undefined se ha unido al servidor" en
 // Discord.
 
-const EVENT_TYPE = "player.join";
+// Tipo del catalogo oficial (docs/event-catalog.md). Conceptualmente
+// "el jugador se conecto"; el catalogo lo llama session.start.
+const EVENT_TYPE = "session.start";
 
 const TITLE = "Jugador conectado";
 

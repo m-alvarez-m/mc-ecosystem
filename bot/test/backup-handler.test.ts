@@ -25,7 +25,7 @@ function backupEvent(
   return {
     id: "42",
     event_uuid: `00000000-0000-4000-8000-${uuid.padStart(12, "0")}`,
-    type: "server.backup",
+    type: "backup.done",
     v: 1,
     ts: "2026-07-27T00:00:00.000Z",
     received_at: "2026-07-27T00:00:00.010Z",
@@ -39,13 +39,13 @@ function backupEvent(
 }
 
 describe("BackupHandler", () => {
-  it("supports('server.backup') true; otros false", () => {
+  it("supports('backup.done') true; otros false", () => {
     const h = new BackupHandler();
-    expect(h.supports("server.backup")).toBe(true);
-    expect(h.supports("backup.done")).toBe(false); // el del catalogo real
-    expect(h.supports("server.tps")).toBe(false);
+    expect(h.supports("backup.done")).toBe(true);
+    expect(h.supports("server.tps_sample")).toBe(false);
+    expect(h.supports("server.start")).toBe(false);
     expect(h.supports("")).toBe(false);
-    expect(h.supports("SERVER.BACKUP")).toBe(false);
+    expect(h.supports("BACKUP.DONE")).toBe(false);
   });
 
   it("publicacion correcta con ok=true", async () => {
@@ -202,7 +202,7 @@ describe("BackupHandler", () => {
     expect(publisher.publish).not.toHaveBeenCalled();
   });
 
-  it("InvalidBackupPayloadError incluye eventUuid, reason y menciona server.backup", async () => {
+  it("InvalidBackupPayloadError incluye eventUuid, reason y menciona backup.done", async () => {
     const h = new BackupHandler();
     const event = backupEvent(
       { size_mb: 10, ok: true },
@@ -215,7 +215,7 @@ describe("BackupHandler", () => {
     expect((err as InvalidBackupPayloadError).eventUuid).toBe(event.event_uuid);
     expect((err as InvalidBackupPayloadError).code).toBe("INVALID_BACKUP_PAYLOAD");
     expect((err as InvalidBackupPayloadError).reason).toContain("data.kind");
-    expect((err as InvalidBackupPayloadError).message).toContain("server.backup");
+    expect((err as InvalidBackupPayloadError).message).toContain("backup.done");
   });
 
   it("publisher llamado exactamente una vez en caso feliz", async () => {

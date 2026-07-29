@@ -228,62 +228,79 @@ mensaje en el canal de pruebas.
 
 ---
 
-## ⚠️ Discrepancia conocida entre tipos de evento del bot y del catálogo
+## Estado de compatibilidad con el catálogo
 
-**Importante antes de probar handlers específicos.**
+Los identificadores de evento del bot **ya están alineados** con
+`docs/event-catalog.md`. Cada handler registra el `EVENT_TYPE` que
+`EventCollector` realmente emite:
 
-El bot v1.1 se implementó con tipos "conceptuales" (`player.join`,
-`server.tps`, `server.backup`, etc.). Estos tipos NO coinciden con los
-que `EventCollector` emite hoy según [`docs/event-catalog.md`]
-(event-catalog.md).
-
-Comparativa:
-
-| Bot registra (`compose.ts`) | Catálogo emite (`event-catalog.md`) | Match |
+| Handler | `EVENT_TYPE` (catálogo) | Payload alineado |
 |---|---|---|
-| `server.start` | `server.start` | ✅ |
-| `server.stop` | `server.stop` | ✅ |
-| `player.death` | `player.death` | ✅ (tipo) / ⚠️ (payload — ver abajo) |
-| `player.join` | `session.start` | ❌ |
-| `player.leave` | `session.end` | ❌ |
-| `player.advancement` | `advancement.done` | ❌ |
-| `player.chat` | `chat.message` | ❌ |
-| `server.tps` | `server.tps_sample` | ❌ |
-| `server.backup` | `backup.done` | ❌ |
+| ServerStartedHandler | `server.start` | ✅ (handler no consume payload) |
+| ServerStoppedHandler | `server.stop` | ✅ (handler no consume payload) |
+| PlayerJoinedHandler | `session.start` | ❌ falta `data.name` en catálogo (solo `ip_hash`) |
+| PlayerLeftHandler | `session.end` | ❌ falta `data.name` en catálogo (solo `duration_s`, `reason`) |
+| PlayerDeathHandler | `player.death` | ❌ falta `data.name` en catálogo (solo `cause`, `killer_*`, `message`) |
+| AdvancementHandler | `advancement.done` | ❌ falta `data.name` en catálogo (solo `advancement`) |
+| ChatHandler | `chat.message` | ❌ falta `data.name` y el mensaje llega como `content`, no `message` |
+| TpsHandler | `server.tps_sample` | ❌ el TPS llega como `tps_1m` (float), no como `tps` |
+| BackupHandler | `backup.done` | ✅ full match (`kind`, `size_mb`, `ok`) |
 
-**Consecuencia en producción real**: cuando `EventCollector` esté
-activo emitiendo con los tipos del catálogo, sólo `server.start`,
-`server.stop` (y `player.death` con caveat de payload) llegarán a un
-handler. Los otros 6 caerán silenciosamente (no hay `onUnknown` hook
-configurado).
+**Consecuencia práctica en producción real**: sólo funcionan
+end-to-end sin más ajustes:
 
-**Consecuencia adicional del payload de `player.death`**: el
-`PlayerDeathHandler` espera `data.name`, pero el catálogo emite
-`{cause, killer_uuid?, killer_mob?, message}` sin nombre. El nombre
-del jugador viaja en la columna `player_uuid` (root del evento). El
-handler actual lanzará `MissingPlayerNameError` en producción real →
-`HandlerExecutionError` → el cursor no avanza y el evento se re-entrega
-indefinidamente hasta que un operador intervenga.
+- `server.start` → publica "Servidor iniciado"
+- `server.stop` → publica "Servidor detenido"
+- `backup.done` → publica el resumen del respaldo
 
-**En este entorno de desarrollo**: para probar los handlers ahora
-mismo, INSERTAR EVENTOS CON LOS TIPOS DEL BOT (columna izquierda), no
-del catálogo. Los eventos insertados a mano con `player.join`,
-`player.chat`, etc. sí llegarán a sus handlers. Ver checklist abajo.
+Los otros 6 handlers **reciben el evento** (el dispatcher los enruta
+correctamente ahora), pero **lanzan error tipado** (`MissingPlayerNameError`,
+`InvalidTpsError`, `MissingChatMessageError`) porque los campos que
+esperan no vienen en el payload emitido por `EventCollector`. Cada
+error se propaga como `HandlerExecutionError` → el polling engine NO
+avanza el cursor → el mismo evento se re-entrega indefinidamente
+hasta que se resuelvan las incompatibilidades de payload.
 
-**Cómo cerrar el gap** — en sesión aparte, no en ésta:
-- **Ruta A** *(recomendada)*: renombrar `EVENT_TYPE` en cada handler
-  a su equivalente del catálogo, adaptar la extracción de `name` (via
-  lookup UUID→nombre contra `api /players/*` o tabla `players`),
-  actualizar tests. Superficie de cambio acotada al bot.
-- **Ruta B**: modificar `EventCollector` para emitir tipos duales o
-  migrar los nombres del catálogo. Requiere trabajo Java + redespliegue
-  del plugin.
+### Incompatibilidades de payload restantes (fuera de scope de la alineación)
+
+Para los 6 handlers arriba, el gap se cierra con alguna de estas rutas
+(cada una es sesión propia):
+
+1. **Nombre del jugador**: el catálogo pasa `player_uuid` en el
+   root del evento; los handlers esperan `data.name`. Opciones:
+   - Endpoint nuevo en `api`: `GET /players/{uuid}` que devuelve
+     `{name}`. Handlers hacen lookup UUID→name antes de publicar.
+     Añade una round-trip HTTP por evento (cacheable).
+   - Enriquecer el evento en el productor: `EventCollector` incluye
+     `data.name` al emitir. Ruta más limpia pero requiere plugin work.
+   - Enriquecimiento en la api: middleware que resuelve `player_uuid`
+     → `name` y añade `data.name` antes de que el bot lea el evento.
+     Descarta separación de responsabilidades (api mutando eventos).
+2. **Campo `chat.message.data.message`**: catálogo lo llama `content`.
+   Trivial de renombrar en `ChatHandler.extractChatMessage()`.
+3. **Campo `server.tps_sample.data.tps`**: catálogo lo llama `tps_1m`.
+   Trivial de renombrar en `TpsHandler.extractTps()`.
+
+Puntos 2 y 3 son fixes de una línea cada uno; podrían agruparse en una
+sesión corta de "field name alignment". El punto 1 es el más
+significativo y depende de la ruta arquitectónica que decida el dueño.
+
+### Para probar en dev mientras tanto
+
+En dev, los `curl` del checklist abajo insertan eventos DIRECTAMENTE
+por `POST /events` con los campos que el bot espera (`data.name`,
+`data.message`, `data.tps`, etc.). Estos eventos sí llegan
+correctamente a los handlers, se procesan sin error, y publican en
+Discord. Es una prueba VÁLIDA del pipeline del bot, aunque no
+representa fielmente lo que emitirá `EventCollector` sin las
+correcciones de payload.
 
 ## Checklist de verificación por tipo de evento
 
 Para cada tipo, un `curl` que genera el evento y el mensaje esperado
-en Discord. Usar los tipos que el bot conoce (`player.join`, etc.);
-ver la advertencia previa.
+en Discord. Los `type` corresponden al catálogo (los mismos que el
+bot registra ahora). Los payloads son los que el HANDLER espera —
+algunos difieren del catálogo real, ver sección anterior.
 
 Requiere las funciones `UUID` y `TS` definidas arriba.
 
@@ -301,17 +318,17 @@ curl -X POST http://localhost:3000/events -H "Content-Type: application/json" \
 ```
 **Discord**: `**Servidor detenido**` / `Servidor detenido correctamente.`
 
-### ✅ player.join
+### ✅ session.start (jugador conectado)
 ```bash
 curl -X POST http://localhost:3000/events -H "Content-Type: application/json" \
-  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"player.join\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"name\":\"Vancorbus\"}}"
+  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"session.start\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"name\":\"Vancorbus\"}}"
 ```
 **Discord**: `**Jugador conectado**` / `Vancorbus se ha unido al servidor.`
 
-### ✅ player.leave
+### ✅ session.end (jugador desconectado)
 ```bash
 curl -X POST http://localhost:3000/events -H "Content-Type: application/json" \
-  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"player.leave\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"name\":\"Vancorbus\"}}"
+  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"session.end\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"name\":\"Vancorbus\"}}"
 ```
 **Discord**: `**Jugador desconectado**` / `Vancorbus ha salido del servidor.`
 
@@ -329,38 +346,38 @@ curl -X POST http://localhost:3000/events -H "Content-Type: application/json" \
 ```
 **Discord**: `**Jugador eliminado**` / `Vancorbus ha muerto.`
 
-### ✅ player.advancement
+### ✅ advancement.done
 ```bash
 curl -X POST http://localhost:3000/events -H "Content-Type: application/json" \
-  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"player.advancement\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"name\":\"Vancorbus\",\"advancement\":\"Enter the Nether\"}}"
+  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"advancement.done\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"name\":\"Vancorbus\",\"advancement\":\"Enter the Nether\"}}"
 ```
 **Discord**: `**Nuevo avance**` / `Vancorbus ha conseguido el avance: Enter the Nether.`
 
-### ✅ player.chat
+### ✅ chat.message
 ```bash
 curl -X POST http://localhost:3000/events -H "Content-Type: application/json" \
-  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"player.chat\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"name\":\"Vancorbus\",\"message\":\"hola mundo\"}}"
+  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"chat.message\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"name\":\"Vancorbus\",\"message\":\"hola mundo\"}}"
 ```
 **Discord**: `**Chat**` / `Vancorbus: hola mundo`
 
-### ✅ server.tps
+### ✅ server.tps_sample
 ```bash
 curl -X POST http://localhost:3000/events -H "Content-Type: application/json" \
-  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"server.tps\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"tps\":19.87}}"
+  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"server.tps_sample\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"tps\":19.87}}"
 ```
 **Discord**: `**Estado del servidor**` / `TPS actual: 19.87`
 
-### ✅ server.backup
+### ✅ backup.done
 ```bash
 curl -X POST http://localhost:3000/events -H "Content-Type: application/json" \
-  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"server.backup\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"kind\":\"world\",\"size_mb\":223,\"ok\":true}}"
+  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"backup.done\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"kind\":\"world\",\"size_mb\":223,\"ok\":true}}"
 ```
 **Discord**: `**Respaldo completado**` / `Tipo: world. Tamaño: 223 MB. Estado: exitoso.`
 
 Con `ok:false`:
 ```bash
 curl -X POST http://localhost:3000/events -H "Content-Type: application/json" \
-  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"server.backup\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"kind\":\"db\",\"size_mb\":5,\"ok\":false}}"
+  -d "{\"event_uuid\":\"$(UUID)\",\"type\":\"backup.done\",\"v\":1,\"ts\":\"$(TS)\",\"data\":{\"kind\":\"db\",\"size_mb\":5,\"ok\":false}}"
 ```
 **Discord**: `**Respaldo completado**` / `Tipo: db. Tamaño: 5 MB. Estado: fallido.`
 

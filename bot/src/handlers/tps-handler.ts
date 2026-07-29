@@ -11,7 +11,7 @@ import type { EventRecord } from "../eventstore";
 // vive fuera (handler propio con umbral configurable, dashboard,
 // alerta externa).
 
-const EVENT_TYPE = "server.tps";
+const EVENT_TYPE = "server.tps_sample";
 
 const TITLE = "Estado del servidor";
 
@@ -26,7 +26,7 @@ export class InvalidTpsError extends Error {
 
   constructor(public readonly eventUuid: string) {
     super(
-      `server.tps sin campo data.tps numerico valido (event_uuid=${eventUuid})`,
+      `server.tps_sample sin campo data.tps numerico valido (event_uuid=${eventUuid})`,
     );
     this.name = "InvalidTpsError";
   }

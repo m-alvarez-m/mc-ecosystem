@@ -23,7 +23,7 @@ function playerLeaveEvent(
   return {
     id: "42",
     event_uuid: `00000000-0000-4000-8000-${uuid.padStart(12, "0")}`,
-    type: "player.leave",
+    type: "session.end",
     v: 1,
     ts: "2026-07-27T00:00:00.000Z",
     received_at: "2026-07-27T00:00:00.010Z",
@@ -37,13 +37,13 @@ function playerLeaveEvent(
 }
 
 describe("PlayerLeftHandler", () => {
-  it("supports('player.leave') true; otros false", () => {
+  it("supports('session.end') true; otros false", () => {
     const h = new PlayerLeftHandler();
-    expect(h.supports("player.leave")).toBe(true);
-    expect(h.supports("player.join")).toBe(false);
-    expect(h.supports("session.end")).toBe(false);
+    expect(h.supports("session.end")).toBe(true);
+    expect(h.supports("session.start")).toBe(false);
+    expect(h.supports("player.death")).toBe(false);
     expect(h.supports("")).toBe(false);
-    expect(h.supports("PLAYER.LEAVE")).toBe(false);
+    expect(h.supports("SESSION.END")).toBe(false);
   });
 
   it("publicacion correcta: publisher recibe title + body con nombre", async () => {
@@ -120,7 +120,7 @@ describe("PlayerLeftHandler", () => {
     expect(publisher.publish).not.toHaveBeenCalled();
   });
 
-  it("MissingPlayerNameError incluye event_uuid y menciona player.leave", async () => {
+  it("MissingPlayerNameError incluye event_uuid y menciona session.end", async () => {
     const h = new PlayerLeftHandler();
     const event = playerLeaveEvent({}, "cafecafecafe");
     const err = await h
@@ -129,7 +129,7 @@ describe("PlayerLeftHandler", () => {
     expect(err).toBeInstanceOf(MissingPlayerNameError);
     expect((err as MissingPlayerNameError).eventUuid).toBe(event.event_uuid);
     expect((err as MissingPlayerNameError).code).toBe("MISSING_PLAYER_NAME");
-    expect((err as MissingPlayerNameError).message).toContain("player.leave");
+    expect((err as MissingPlayerNameError).message).toContain("session.end");
   });
 
   it("publisher llamado exactamente una vez en caso feliz", async () => {

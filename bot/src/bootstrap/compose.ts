@@ -51,16 +51,19 @@ export function createHandlerRegistrations(): ReadonlyArray<{
   eventType: string;
   handler: EventHandler;
 }> {
+  // Tipos alineados con docs/event-catalog.md. Cambiar cualquiera
+  // requiere tambien cambiar el EVENT_TYPE del handler correspondiente,
+  // porque el dispatcher.register() verifica handler.supports(type).
   return [
     { eventType: "server.start", handler: new ServerStartedHandler() },
     { eventType: "server.stop", handler: new ServerStoppedHandler() },
-    { eventType: "player.join", handler: new PlayerJoinedHandler() },
-    { eventType: "player.leave", handler: new PlayerLeftHandler() },
+    { eventType: "session.start", handler: new PlayerJoinedHandler() },
+    { eventType: "session.end", handler: new PlayerLeftHandler() },
     { eventType: "player.death", handler: new PlayerDeathHandler() },
-    { eventType: "player.advancement", handler: new AdvancementHandler() },
-    { eventType: "player.chat", handler: new ChatHandler() },
-    { eventType: "server.tps", handler: new TpsHandler() },
-    { eventType: "server.backup", handler: new BackupHandler() },
+    { eventType: "advancement.done", handler: new AdvancementHandler() },
+    { eventType: "chat.message", handler: new ChatHandler() },
+    { eventType: "server.tps_sample", handler: new TpsHandler() },
+    { eventType: "backup.done", handler: new BackupHandler() },
   ];
 }
 

@@ -26,7 +26,7 @@ function chatEvent(
   return {
     id: "42",
     event_uuid: `00000000-0000-4000-8000-${uuid.padStart(12, "0")}`,
-    type: "player.chat",
+    type: "chat.message",
     v: 1,
     ts: "2026-07-27T00:00:00.000Z",
     received_at: "2026-07-27T00:00:00.010Z",
@@ -40,13 +40,13 @@ function chatEvent(
 }
 
 describe("ChatHandler", () => {
-  it("supports('player.chat') true; otros false", () => {
+  it("supports('chat.message') true; otros false", () => {
     const h = new ChatHandler();
-    expect(h.supports("player.chat")).toBe(true);
-    expect(h.supports("chat.message")).toBe(false); // el del catalogo real
-    expect(h.supports("player.join")).toBe(false);
+    expect(h.supports("chat.message")).toBe(true);
+    expect(h.supports("session.start")).toBe(false);
+    expect(h.supports("player.death")).toBe(false);
     expect(h.supports("")).toBe(false);
-    expect(h.supports("PLAYER.CHAT")).toBe(false);
+    expect(h.supports("CHAT.MESSAGE")).toBe(false);
   });
 
   it("publicacion correcta con nombre y mensaje", async () => {
@@ -184,7 +184,7 @@ describe("ChatHandler", () => {
     expect(publisher.publish).not.toHaveBeenCalled();
   });
 
-  it("errores incluyen event_uuid y mencionan player.chat", async () => {
+  it("errores incluyen event_uuid y mencionan chat.message", async () => {
     const h = new ChatHandler();
 
     const eventA = chatEvent({ message: "x" }, "aaaa1111aaaa");
@@ -193,7 +193,7 @@ describe("ChatHandler", () => {
       .catch((e) => e);
     expect(errA).toBeInstanceOf(MissingPlayerNameError);
     expect((errA as MissingPlayerNameError).eventUuid).toBe(eventA.event_uuid);
-    expect((errA as MissingPlayerNameError).message).toContain("player.chat");
+    expect((errA as MissingPlayerNameError).message).toContain("chat.message");
 
     const eventB = chatEvent({ name: "V" }, "bbbb2222bbbb");
     const errB = await h
@@ -201,7 +201,7 @@ describe("ChatHandler", () => {
       .catch((e) => e);
     expect(errB).toBeInstanceOf(MissingChatMessageError);
     expect((errB as MissingChatMessageError).eventUuid).toBe(eventB.event_uuid);
-    expect((errB as MissingChatMessageError).message).toContain("player.chat");
+    expect((errB as MissingChatMessageError).message).toContain("chat.message");
   });
 
   it("publisher llamado exactamente una vez en caso feliz", async () => {

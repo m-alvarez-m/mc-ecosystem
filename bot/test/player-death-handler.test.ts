@@ -42,7 +42,7 @@ describe("PlayerDeathHandler", () => {
     expect(h.supports("player.death")).toBe(true);
     expect(h.supports("player.kill")).toBe(false);
     expect(h.supports("mob.kill")).toBe(false);
-    expect(h.supports("player.leave")).toBe(false);
+    expect(h.supports("session.end")).toBe(false);
     expect(h.supports("")).toBe(false);
     expect(h.supports("PLAYER.DEATH")).toBe(false);
   });

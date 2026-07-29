@@ -17,7 +17,7 @@ import { MissingPlayerNameError } from "./errors";
 // limites propios (Discord: 2000 chars) los aplicara con su propia
 // politica de error.
 
-const EVENT_TYPE = "player.chat";
+const EVENT_TYPE = "chat.message";
 
 const TITLE = "Chat";
 
@@ -31,7 +31,7 @@ export class MissingChatMessageError extends Error {
 
   constructor(public readonly eventUuid: string) {
     super(
-      `player.chat sin campo data.message valido (event_uuid=${eventUuid})`,
+      `chat.message sin campo data.message valido (event_uuid=${eventUuid})`,
     );
     this.name = "MissingChatMessageError";
   }

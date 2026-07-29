@@ -20,7 +20,7 @@ function playerJoinEvent(data: Record<string, unknown>, uuid = "aaaa"): EventRec
   return {
     id: "42",
     event_uuid: `00000000-0000-4000-8000-${uuid.padStart(12, "0")}`,
-    type: "player.join",
+    type: "session.start",
     v: 1,
     ts: "2026-07-27T00:00:00.000Z",
     received_at: "2026-07-27T00:00:00.010Z",
@@ -34,13 +34,13 @@ function playerJoinEvent(data: Record<string, unknown>, uuid = "aaaa"): EventRec
 }
 
 describe("PlayerJoinedHandler", () => {
-  it("supports('player.join') true; otros false", () => {
+  it("supports('session.start') true; otros false", () => {
     const h = new PlayerJoinedHandler();
-    expect(h.supports("player.join")).toBe(true);
-    expect(h.supports("player.leave")).toBe(false);
-    expect(h.supports("session.start")).toBe(false);
+    expect(h.supports("session.start")).toBe(true);
+    expect(h.supports("session.end")).toBe(false);
+    expect(h.supports("server.start")).toBe(false);
     expect(h.supports("")).toBe(false);
-    expect(h.supports("PLAYER.JOIN")).toBe(false);
+    expect(h.supports("SESSION.START")).toBe(false);
   });
 
   it("publicacion correcta: publisher recibe title + body con el nombre interpolado", async () => {

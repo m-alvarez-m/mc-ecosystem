@@ -46,13 +46,13 @@ function fakeConfig(): Config {
 const EXPECTED_TYPES = [
   "server.start",
   "server.stop",
-  "player.join",
-  "player.leave",
+  "session.start",
+  "session.end",
   "player.death",
-  "player.advancement",
-  "player.chat",
-  "server.tps",
-  "server.backup",
+  "advancement.done",
+  "chat.message",
+  "server.tps_sample",
+  "backup.done",
 ] as const;
 
 const EXPECTED_HANDLER_CTORS = [

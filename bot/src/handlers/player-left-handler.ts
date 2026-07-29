@@ -9,7 +9,9 @@ import { MissingPlayerNameError } from "./errors";
 // construye mensaje. Si el payload no cumple lo minimo, lanza
 // MissingPlayerNameError (compartido en ./errors) y NO publica.
 
-const EVENT_TYPE = "player.leave";
+// Tipo del catalogo oficial. Conceptualmente "el jugador se desconecto";
+// el catalogo lo llama session.end.
+const EVENT_TYPE = "session.end";
 
 const TITLE = "Jugador desconectado";
 
