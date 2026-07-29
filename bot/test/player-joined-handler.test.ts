@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import {
-  PlayerJoinedHandler,
-  MissingPlayerNameError,
-} from "../src/handlers/player-joined-handler";
+import { PlayerJoinedHandler } from "../src/handlers/player-joined-handler";
+import { MissingPlayerNameError } from "../src/handlers/errors";
 import type { DispatchContext } from "../src/context";
 import type { Publisher, PublishPayload } from "../src/publisher";
 import type { EventRecord } from "../src/eventstore";

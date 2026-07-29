@@ -1,6 +1,7 @@
 import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
+import { MissingPlayerNameError } from "./errors";
 
 // PlayerDeathHandler: publica cuando un jugador muere en el servidor.
 //
@@ -18,23 +19,6 @@ import type { EventRecord } from "../eventstore";
 const EVENT_TYPE = "player.death";
 
 const TITLE = "Jugador eliminado";
-
-/**
- * Error del handler cuando el payload no permite construir el mensaje.
- * Se lanza si falta el nombre del jugador (unico campo REQUERIDO).
- * Propagado al dispatcher, que lo envuelve en HandlerExecutionError y
- * detiene el batch (el polling engine no avanza el cursor).
- */
-export class MissingPlayerNameError extends Error {
-  readonly code = "MISSING_PLAYER_NAME";
-
-  constructor(public readonly eventUuid: string) {
-    super(
-      `player.death sin campo data.name valido (event_uuid=${eventUuid})`,
-    );
-    this.name = "MissingPlayerNameError";
-  }
-}
 
 export class PlayerDeathHandler implements EventHandler {
   supports(eventType: string): boolean {
@@ -60,11 +44,11 @@ export class PlayerDeathHandler implements EventHandler {
 function extractPlayerName(event: EventRecord): string {
   const raw = event.data["name"];
   if (typeof raw !== "string") {
-    throw new MissingPlayerNameError(event.event_uuid);
+    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
   }
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
-    throw new MissingPlayerNameError(event.event_uuid);
+    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
   }
   return trimmed;
 }

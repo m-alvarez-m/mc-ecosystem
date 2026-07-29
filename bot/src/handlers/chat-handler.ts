@@ -1,6 +1,7 @@
 import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
+import { MissingPlayerNameError } from "./errors";
 
 // ChatHandler: publica cada mensaje de chat del servidor.
 //
@@ -19,21 +20,6 @@ import type { EventRecord } from "../eventstore";
 const EVENT_TYPE = "player.chat";
 
 const TITLE = "Chat";
-
-/**
- * Error del handler cuando falta el nombre del jugador. Se lanza si
- * `data.name` no existe, no es string, o es vacio/whitespace.
- */
-export class MissingPlayerNameError extends Error {
-  readonly code = "MISSING_PLAYER_NAME";
-
-  constructor(public readonly eventUuid: string) {
-    super(
-      `player.chat sin campo data.name valido (event_uuid=${eventUuid})`,
-    );
-    this.name = "MissingPlayerNameError";
-  }
-}
 
 /**
  * Error del handler cuando falta el mensaje. Se lanza si
@@ -74,11 +60,11 @@ export class ChatHandler implements EventHandler {
 function extractPlayerName(event: EventRecord): string {
   const raw = event.data["name"];
   if (typeof raw !== "string") {
-    throw new MissingPlayerNameError(event.event_uuid);
+    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
   }
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
-    throw new MissingPlayerNameError(event.event_uuid);
+    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
   }
   return trimmed;
 }

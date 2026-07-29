@@ -1,36 +1,21 @@
 import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
+import { MissingPlayerNameError } from "./errors";
 
 // PlayerJoinedHandler: publica cuando un jugador se une al servidor.
 //
 // A diferencia de los handlers de server.start / server.stop, este
 // consume el payload del evento (necesita el nombre del jugador para
 // construir el mensaje). Si el payload no cumple lo minimo requerido,
-// lanza MissingPlayerNameError y NO publica nada — mejor un error
-// tipado propagable al dispatcher que un mensaje "undefined se ha
-// unido al servidor" en Discord.
+// lanza MissingPlayerNameError (definido en ./errors, compartido con
+// otros handlers) y NO publica nada — mejor un error tipado propagable
+// al dispatcher que un mensaje "undefined se ha unido al servidor" en
+// Discord.
 
 const EVENT_TYPE = "player.join";
 
 const TITLE = "Jugador conectado";
-
-/**
- * Error del handler cuando el payload del evento no permite construir
- * el mensaje. Propagado al dispatcher, que a su vez lo envuelve en
- * HandlerExecutionError y detiene el batch (el polling engine no
- * avanza el cursor y el evento vuelve a la proxima iteracion).
- */
-export class MissingPlayerNameError extends Error {
-  readonly code = "MISSING_PLAYER_NAME";
-
-  constructor(public readonly eventUuid: string) {
-    super(
-      `player.join sin campo data.name valido (event_uuid=${eventUuid})`,
-    );
-    this.name = "MissingPlayerNameError";
-  }
-}
 
 export class PlayerJoinedHandler implements EventHandler {
   supports(eventType: string): boolean {
@@ -59,11 +44,11 @@ export class PlayerJoinedHandler implements EventHandler {
 function extractPlayerName(event: EventRecord): string {
   const raw = event.data["name"];
   if (typeof raw !== "string") {
-    throw new MissingPlayerNameError(event.event_uuid);
+    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
   }
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
-    throw new MissingPlayerNameError(event.event_uuid);
+    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
   }
   return trimmed;
 }
