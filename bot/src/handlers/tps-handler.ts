@@ -26,7 +26,7 @@ export class InvalidTpsError extends Error {
 
   constructor(public readonly eventUuid: string) {
     super(
-      `server.tps_sample sin campo data.tps numerico valido (event_uuid=${eventUuid})`,
+      `server.tps_sample sin campo data.tps_1m numerico valido (event_uuid=${eventUuid})`,
     );
     this.name = "InvalidTpsError";
   }
@@ -47,7 +47,8 @@ export class TpsHandler implements EventHandler {
 }
 
 /**
- * TPS del payload. Requerido y numerico. Number.isFinite rechaza:
+ * TPS del payload. Viene en `data.tps_1m` (media del ultimo minuto)
+ * segun el catalogo. Requerido y numerico. Number.isFinite rechaza:
  * - undefined / null (typeof !== "number")
  * - NaN
  * - Infinity / -Infinity
@@ -55,7 +56,7 @@ export class TpsHandler implements EventHandler {
  * del sensor (aunque raros); NO es nuestra funcion clasificar.
  */
 function extractTps(event: EventRecord): number {
-  const raw = event.data["tps"];
+  const raw = event.data["tps_1m"];
   if (typeof raw !== "number" || !Number.isFinite(raw)) {
     throw new InvalidTpsError(event.event_uuid);
   }

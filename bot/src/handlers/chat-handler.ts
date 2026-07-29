@@ -5,9 +5,11 @@ import { MissingPlayerNameError } from "./errors";
 
 // ChatHandler: publica cada mensaje de chat del servidor.
 //
-// Dos campos REQUERIDOS del payload:
+// Dos campos REQUERIDOS del payload (segun docs/event-catalog.md):
 // - `data.name`: nombre del jugador.
-// - `data.message`: contenido del mensaje.
+// - `data.content`: contenido del mensaje (el catalogo lo llama
+//   `content`, no `message`; el nombre de la interfaz del handler
+//   sigue siendo "chat message" para claridad semantica).
 //
 // Politica de contenido:
 // - NO se filtra el contenido del mensaje.
@@ -22,16 +24,16 @@ const EVENT_TYPE = "chat.message";
 const TITLE = "Chat";
 
 /**
- * Error del handler cuando falta el mensaje. Se lanza si
- * `data.message` no existe, no es string, o es cadena vacia (length 0).
- * Whitespace-only SI se publica: es contenido, no ausencia.
+ * Error del handler cuando falta el contenido del mensaje. Se lanza
+ * si `data.content` no existe, no es string, o es cadena vacia
+ * (length 0). Whitespace-only SI se publica: es contenido, no ausencia.
  */
 export class MissingChatMessageError extends Error {
   readonly code = "MISSING_CHAT_MESSAGE";
 
   constructor(public readonly eventUuid: string) {
     super(
-      `chat.message sin campo data.message valido (event_uuid=${eventUuid})`,
+      `chat.message sin campo data.content valido (event_uuid=${eventUuid})`,
     );
     this.name = "MissingChatMessageError";
   }
@@ -70,13 +72,13 @@ function extractPlayerName(event: EventRecord): string {
 }
 
 /**
- * Contenido del mensaje. NO trimeamos: es contenido de usuario, no
- * identificador. Solo validamos que exista como string no-vacio.
- * Whitespace-only ("   ") es valido y se publica tal cual — el
- * usuario decidio enviarlo asi.
+ * Contenido del mensaje. Viene en `data.content` segun el catalogo.
+ * NO trimeamos: es contenido de usuario, no identificador. Solo
+ * validamos que exista como string no-vacio. Whitespace-only ("   ")
+ * es valido y se publica tal cual — el usuario decidio enviarlo asi.
  */
 function extractChatMessage(event: EventRecord): string {
-  const raw = event.data["message"];
+  const raw = event.data["content"];
   if (typeof raw !== "string") {
     throw new MissingChatMessageError(event.event_uuid);
   }

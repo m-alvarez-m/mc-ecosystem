@@ -45,7 +45,7 @@ describe("TpsHandler", () => {
   it("publicacion correcta con TPS entero: '<title>' + 'TPS actual: 20'", async () => {
     const publisher = fakePublisher();
     const h = new TpsHandler();
-    await h.handle(fakeContext(publisher), tpsEvent({ tps: 20 }));
+    await h.handle(fakeContext(publisher), tpsEvent({ tps_1m: 20 }));
 
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Estado del servidor",
@@ -56,7 +56,7 @@ describe("TpsHandler", () => {
   it("publicacion correcta con TPS decimal", async () => {
     const publisher = fakePublisher();
     const h = new TpsHandler();
-    await h.handle(fakeContext(publisher), tpsEvent({ tps: 19.85 }));
+    await h.handle(fakeContext(publisher), tpsEvent({ tps_1m: 19.85 }));
 
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Estado del servidor",
@@ -67,7 +67,7 @@ describe("TpsHandler", () => {
   it("acepta cero (no clasifica como malo)", async () => {
     const publisher = fakePublisher();
     const h = new TpsHandler();
-    await h.handle(fakeContext(publisher), tpsEvent({ tps: 0 }));
+    await h.handle(fakeContext(publisher), tpsEvent({ tps_1m: 0 }));
 
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Estado del servidor",
@@ -78,7 +78,7 @@ describe("TpsHandler", () => {
   it("acepta negativos (aunque raros, no es nuestra funcion clasificar)", async () => {
     const publisher = fakePublisher();
     const h = new TpsHandler();
-    await h.handle(fakeContext(publisher), tpsEvent({ tps: -1.5 }));
+    await h.handle(fakeContext(publisher), tpsEvent({ tps_1m: -1.5 }));
 
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Estado del servidor",
@@ -86,7 +86,7 @@ describe("TpsHandler", () => {
     });
   });
 
-  it("data.tps ausente: InvalidTpsError y NO publica", async () => {
+  it("data.tps_1m ausente: InvalidTpsError y NO publica", async () => {
     const publisher = fakePublisher();
     const h = new TpsHandler();
 
@@ -96,37 +96,37 @@ describe("TpsHandler", () => {
     expect(publisher.publish).not.toHaveBeenCalled();
   });
 
-  it("data.tps no numerico: InvalidTpsError", async () => {
+  it("data.tps_1m no numerico: InvalidTpsError", async () => {
     const publisher = fakePublisher();
     const h = new TpsHandler();
 
     await expect(
-      h.handle(fakeContext(publisher), tpsEvent({ tps: "20" })),
+      h.handle(fakeContext(publisher), tpsEvent({ tps_1m: "20" })),
     ).rejects.toBeInstanceOf(InvalidTpsError);
     await expect(
-      h.handle(fakeContext(publisher), tpsEvent({ tps: null })),
+      h.handle(fakeContext(publisher), tpsEvent({ tps_1m: null })),
     ).rejects.toBeInstanceOf(InvalidTpsError);
     await expect(
-      h.handle(fakeContext(publisher), tpsEvent({ tps: true })),
+      h.handle(fakeContext(publisher), tpsEvent({ tps_1m: true })),
     ).rejects.toBeInstanceOf(InvalidTpsError);
     await expect(
-      h.handle(fakeContext(publisher), tpsEvent({ tps: [20] })),
+      h.handle(fakeContext(publisher), tpsEvent({ tps_1m: [20] })),
     ).rejects.toBeInstanceOf(InvalidTpsError);
     expect(publisher.publish).not.toHaveBeenCalled();
   });
 
-  it("data.tps NaN o Infinity: InvalidTpsError", async () => {
+  it("data.tps_1m NaN o Infinity: InvalidTpsError", async () => {
     const publisher = fakePublisher();
     const h = new TpsHandler();
 
     await expect(
-      h.handle(fakeContext(publisher), tpsEvent({ tps: Number.NaN })),
+      h.handle(fakeContext(publisher), tpsEvent({ tps_1m: Number.NaN })),
     ).rejects.toBeInstanceOf(InvalidTpsError);
     await expect(
-      h.handle(fakeContext(publisher), tpsEvent({ tps: Number.POSITIVE_INFINITY })),
+      h.handle(fakeContext(publisher), tpsEvent({ tps_1m: Number.POSITIVE_INFINITY })),
     ).rejects.toBeInstanceOf(InvalidTpsError);
     await expect(
-      h.handle(fakeContext(publisher), tpsEvent({ tps: Number.NEGATIVE_INFINITY })),
+      h.handle(fakeContext(publisher), tpsEvent({ tps_1m: Number.NEGATIVE_INFINITY })),
     ).rejects.toBeInstanceOf(InvalidTpsError);
     expect(publisher.publish).not.toHaveBeenCalled();
   });
@@ -146,7 +146,7 @@ describe("TpsHandler", () => {
   it("publisher llamado exactamente una vez en caso feliz", async () => {
     const publisher = fakePublisher();
     const h = new TpsHandler();
-    await h.handle(fakeContext(publisher), tpsEvent({ tps: 20 }));
+    await h.handle(fakeContext(publisher), tpsEvent({ tps_1m: 20 }));
     expect(publisher.publish).toHaveBeenCalledTimes(1);
   });
 
@@ -159,7 +159,7 @@ describe("TpsHandler", () => {
     };
     const h = new TpsHandler();
     await expect(
-      h.handle(fakeContext(publisher), tpsEvent({ tps: 20 })),
+      h.handle(fakeContext(publisher), tpsEvent({ tps_1m: 20 })),
     ).rejects.toBe(boom);
   });
 
@@ -171,7 +171,7 @@ describe("TpsHandler", () => {
       },
     };
     const h = new TpsHandler();
-    await h.handle(fakeContext(publisher), tpsEvent({ tps: 19.87 }));
+    await h.handle(fakeContext(publisher), tpsEvent({ tps_1m: 19.87 }));
     expect(seen).toEqual([
       { title: "Estado del servidor", body: "TPS actual: 19.87" },
     ]);

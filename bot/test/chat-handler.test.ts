@@ -54,7 +54,7 @@ describe("ChatHandler", () => {
     const h = new ChatHandler();
     await h.handle(
       fakeContext(publisher),
-      chatEvent({ name: "Vancorbus", message: "hola mundo" }),
+      chatEvent({ name: "Vancorbus", content: "hola mundo" }),
     );
 
     expect(publisher.publish).toHaveBeenCalledWith({
@@ -68,11 +68,11 @@ describe("ChatHandler", () => {
     const h = new ChatHandler();
     await h.handle(
       fakeContext(publisher),
-      chatEvent({ name: "Pacman26", message: "por aqui" }),
+      chatEvent({ name: "Pacman26", content: "por aqui" }),
     );
     await h.handle(
       fakeContext(publisher),
-      chatEvent({ name: "Elrid", message: "voy" }),
+      chatEvent({ name: "Elrid", content: "voy" }),
     );
 
     expect(publisher.publish.mock.calls[0]![0]).toEqual({
@@ -90,7 +90,7 @@ describe("ChatHandler", () => {
     const h = new ChatHandler();
     await h.handle(
       fakeContext(publisher),
-      chatEvent({ name: "  Vancorbus  ", message: "  hola  " }),
+      chatEvent({ name: "  Vancorbus  ", content: "  hola  " }),
     );
 
     expect(publisher.publish).toHaveBeenCalledWith({
@@ -104,7 +104,7 @@ describe("ChatHandler", () => {
     const h = new ChatHandler();
     await h.handle(
       fakeContext(publisher),
-      chatEvent({ name: "V", message: "/tp Vancorbus" }),
+      chatEvent({ name: "V", content: "/tp Vancorbus" }),
     );
 
     expect(publisher.publish).toHaveBeenCalledWith({
@@ -119,7 +119,7 @@ describe("ChatHandler", () => {
     const longMessage = "x".repeat(5000);
     await h.handle(
       fakeContext(publisher),
-      chatEvent({ name: "V", message: longMessage }),
+      chatEvent({ name: "V", content: longMessage }),
     );
 
     const call = publisher.publish.mock.calls[0]![0] as PublishPayload;
@@ -130,7 +130,7 @@ describe("ChatHandler", () => {
   it("mensaje solo con whitespace es contenido valido y se publica", async () => {
     const publisher = fakePublisher();
     const h = new ChatHandler();
-    await h.handle(fakeContext(publisher), chatEvent({ name: "V", message: "   " }));
+    await h.handle(fakeContext(publisher), chatEvent({ name: "V", content: "   " }));
 
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Chat",
@@ -143,7 +143,7 @@ describe("ChatHandler", () => {
     const h = new ChatHandler();
 
     await expect(
-      h.handle(fakeContext(publisher), chatEvent({ message: "hola" })),
+      h.handle(fakeContext(publisher), chatEvent({ content: "hola" })),
     ).rejects.toBeInstanceOf(MissingPlayerNameError);
     expect(publisher.publish).not.toHaveBeenCalled();
   });
@@ -153,15 +153,15 @@ describe("ChatHandler", () => {
     const h = new ChatHandler();
 
     await expect(
-      h.handle(fakeContext(publisher), chatEvent({ name: 42, message: "hola" })),
+      h.handle(fakeContext(publisher), chatEvent({ name: 42, content: "hola" })),
     ).rejects.toBeInstanceOf(MissingPlayerNameError);
     await expect(
-      h.handle(fakeContext(publisher), chatEvent({ name: "  ", message: "hola" })),
+      h.handle(fakeContext(publisher), chatEvent({ name: "  ", content: "hola" })),
     ).rejects.toBeInstanceOf(MissingPlayerNameError);
     expect(publisher.publish).not.toHaveBeenCalled();
   });
 
-  it("data.message ausente: MissingChatMessageError y NO publica", async () => {
+  it("data.content ausente: MissingChatMessageError y NO publica", async () => {
     const publisher = fakePublisher();
     const h = new ChatHandler();
 
@@ -171,15 +171,15 @@ describe("ChatHandler", () => {
     expect(publisher.publish).not.toHaveBeenCalled();
   });
 
-  it("data.message no-string o vacio (length 0): MissingChatMessageError", async () => {
+  it("data.content no-string o vacio (length 0): MissingChatMessageError", async () => {
     const publisher = fakePublisher();
     const h = new ChatHandler();
 
     await expect(
-      h.handle(fakeContext(publisher), chatEvent({ name: "V", message: 42 })),
+      h.handle(fakeContext(publisher), chatEvent({ name: "V", content: 42 })),
     ).rejects.toBeInstanceOf(MissingChatMessageError);
     await expect(
-      h.handle(fakeContext(publisher), chatEvent({ name: "V", message: "" })),
+      h.handle(fakeContext(publisher), chatEvent({ name: "V", content: "" })),
     ).rejects.toBeInstanceOf(MissingChatMessageError);
     expect(publisher.publish).not.toHaveBeenCalled();
   });
@@ -187,7 +187,7 @@ describe("ChatHandler", () => {
   it("errores incluyen event_uuid y mencionan chat.message", async () => {
     const h = new ChatHandler();
 
-    const eventA = chatEvent({ message: "x" }, "aaaa1111aaaa");
+    const eventA = chatEvent({ content: "x" }, "aaaa1111aaaa");
     const errA = await h
       .handle(fakeContext(fakePublisher()), eventA)
       .catch((e) => e);
@@ -207,7 +207,7 @@ describe("ChatHandler", () => {
   it("publisher llamado exactamente una vez en caso feliz", async () => {
     const publisher = fakePublisher();
     const h = new ChatHandler();
-    await h.handle(fakeContext(publisher), chatEvent({ name: "V", message: "hola" }));
+    await h.handle(fakeContext(publisher), chatEvent({ name: "V", content: "hola" }));
     expect(publisher.publish).toHaveBeenCalledTimes(1);
   });
 
@@ -220,7 +220,7 @@ describe("ChatHandler", () => {
     };
     const h = new ChatHandler();
     await expect(
-      h.handle(fakeContext(publisher), chatEvent({ name: "V", message: "hola" })),
+      h.handle(fakeContext(publisher), chatEvent({ name: "V", content: "hola" })),
     ).rejects.toBe(boom);
   });
 
@@ -234,7 +234,7 @@ describe("ChatHandler", () => {
     const h = new ChatHandler();
     await h.handle(
       fakeContext(publisher),
-      chatEvent({ name: "Vancorbus", message: "hola mundo minecraft" }),
+      chatEvent({ name: "Vancorbus", content: "hola mundo minecraft" }),
     );
     expect(seen).toEqual([
       { title: "Chat", body: "Vancorbus: hola mundo minecraft" },
