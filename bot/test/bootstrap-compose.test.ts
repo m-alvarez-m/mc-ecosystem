@@ -1,0 +1,223 @@
+import { describe, it, expect } from "vitest";
+import {
+  composeApp,
+  createHandlerRegistrations,
+} from "../src/bootstrap/compose";
+import type { Config } from "../src/config/env";
+import { DiscordPublisher } from "../src/discord/discord-publisher";
+import { EventDispatcher } from "../src/dispatcher";
+import { EventStoreClient } from "../src/eventstore";
+import { FileCursorStore } from "../src/cursor";
+import { PollingEngine } from "../src/polling";
+import {
+  ServerStartedHandler,
+  ServerStoppedHandler,
+  PlayerJoinedHandler,
+  PlayerLeftHandler,
+  PlayerDeathHandler,
+  AdvancementHandler,
+  ChatHandler,
+  TpsHandler,
+  BackupHandler,
+} from "../src/handlers";
+
+// Tests del bootstrap.
+// composeApp() es una factoria pura; los tests la ejecutan sin miedo
+// (no toca red ni disco). start()/stop() no se ejercitan aqui.
+
+function fakeConfig(): Config {
+  return {
+    discord: {
+      token: "fake-token",
+      guildId: "123456789012345678",
+      eventsChannelId: "987654321098765432",
+    },
+    server: { port: 4000 },
+    eventStore: { baseUrl: "http://api:3000", timeoutMs: 10_000 },
+    cursor: { filePath: "/tmp/pulso/cursor.json" },
+    polling: { intervalMs: 5_000 },
+  };
+}
+
+// ------------------------------------------------------------------
+// createHandlerRegistrations
+// ------------------------------------------------------------------
+
+const EXPECTED_TYPES = [
+  "server.start",
+  "server.stop",
+  "player.join",
+  "player.leave",
+  "player.death",
+  "player.advancement",
+  "player.chat",
+  "server.tps",
+  "server.backup",
+] as const;
+
+const EXPECTED_HANDLER_CTORS = [
+  ServerStartedHandler,
+  ServerStoppedHandler,
+  PlayerJoinedHandler,
+  PlayerLeftHandler,
+  PlayerDeathHandler,
+  AdvancementHandler,
+  ChatHandler,
+  TpsHandler,
+  BackupHandler,
+];
+
+describe("createHandlerRegistrations", () => {
+  it("registra exactamente 9 handlers", () => {
+    const regs = createHandlerRegistrations();
+    expect(regs).toHaveLength(9);
+  });
+
+  it("cubre los tipos de evento esperados y en el orden esperado", () => {
+    const types = createHandlerRegistrations().map((r) => r.eventType);
+    expect(types).toEqual([...EXPECTED_TYPES]);
+  });
+
+  it("cada tipo mapea a una instancia unica (sin duplicados de tipo ni handler)", () => {
+    const regs = createHandlerRegistrations();
+    const seenTypes = new Set(regs.map((r) => r.eventType));
+    const seenHandlers = new Set(regs.map((r) => r.handler));
+    expect(seenTypes.size).toBe(regs.length);
+    expect(seenHandlers.size).toBe(regs.length);
+  });
+
+  it("cada handler es instancia de la clase esperada", () => {
+    const regs = createHandlerRegistrations();
+    for (let i = 0; i < regs.length; i++) {
+      expect(regs[i]!.handler).toBeInstanceOf(EXPECTED_HANDLER_CTORS[i]!);
+    }
+  });
+
+  it("cada handler soporta el tipo bajo el que se registra (supports() -> true)", () => {
+    for (const { eventType, handler } of createHandlerRegistrations()) {
+      expect(handler.supports(eventType)).toBe(true);
+    }
+  });
+
+  it("cada llamada devuelve INSTANCIAS nuevas (aisla estados en tests)", () => {
+    const first = createHandlerRegistrations();
+    const second = createHandlerRegistrations();
+    for (let i = 0; i < first.length; i++) {
+      expect(first[i]!.handler).not.toBe(second[i]!.handler);
+    }
+  });
+});
+
+// ------------------------------------------------------------------
+// composeApp
+// ------------------------------------------------------------------
+
+describe("composeApp", () => {
+  it("crea el grafo completo de servicios con los tipos esperados", () => {
+    const app = composeApp(fakeConfig());
+
+    // Cliente Discord: presente (no verificamos tipo exacto porque
+    // Client de discord.js es opaco/complejo; verificamos que existe
+    // y responde a la API que consumimos).
+    expect(app.services.client).toBeDefined();
+    expect(typeof app.services.client.isReady).toBe("function");
+    expect(typeof app.services.client.destroy).toBe("function");
+
+    expect(app.services.publisher).toBeInstanceOf(DiscordPublisher);
+    expect(app.services.dispatcher).toBeInstanceOf(EventDispatcher);
+    expect(app.services.eventStoreClient).toBeInstanceOf(EventStoreClient);
+    expect(app.services.cursorStore).toBeInstanceOf(FileCursorStore);
+    expect(app.services.pollingEngine).toBeInstanceOf(PollingEngine);
+  });
+
+  it("expone start() y stop() como unico punto de entrada operacional", () => {
+    const app = composeApp(fakeConfig());
+    expect(typeof app.start).toBe("function");
+    expect(typeof app.stop).toBe("function");
+  });
+
+  it("el pollingEngine arranca en isRunning=false (no lo activa compose)", () => {
+    const app = composeApp(fakeConfig());
+    expect(app.services.pollingEngine.isRunning()).toBe(false);
+  });
+
+  it("dispatcher registrado con los 9 handlers: dispatch de tipos conocidos NO invoca onUnknown", async () => {
+    // Test integracion: verificamos que TODOS los tipos esperados
+    // llegan a un handler registrado, usando el hook onUnknown como
+    // deteccion de "gap" (handler no registrado -> onUnknown se llama).
+    //
+    // Necesitamos un dispatcher con onUnknown observable. compose() no
+    // permite inyectarlo, asi que recreamos el mismo registro con el
+    // hook activo. Esto testea que la LISTA de tipos y su registrabilidad
+    // en un dispatcher real son consistentes.
+    const seenUnknown: string[] = [];
+    const context = {
+      publisher: { publish: async () => undefined },
+    };
+    const dispatcher = new EventDispatcher({
+      context,
+      onUnknown: (event) => seenUnknown.push(event.type),
+    });
+    for (const { eventType, handler } of createHandlerRegistrations()) {
+      dispatcher.register(eventType, handler);
+    }
+
+    // Un evento (con payload invalido intencionalmente) por cada tipo
+    // esperado. handler.handle puede lanzar por payload malo, pero
+    // el punto es probar RUTING: si el handler existe, el evento no
+    // cae en onUnknown; si el handler lanza, es HandlerExecutionError
+    // (no onUnknown).
+    for (const type of EXPECTED_TYPES) {
+      const event = {
+        id: "1",
+        event_uuid: "00000000-0000-4000-8000-000000000001",
+        type,
+        v: 1,
+        ts: "2026-07-27T00:00:00.000Z",
+        received_at: "2026-07-27T00:00:00.010Z",
+        player_uuid: null,
+        world: null,
+        x: null,
+        y: null,
+        z: null,
+        data: {},
+      };
+      // Ignoramos el error si viene: no es la asercion de este test.
+      await dispatcher.dispatch([event]).catch(() => undefined);
+    }
+
+    expect(seenUnknown).toEqual([]);
+  });
+
+  it("dispatcher SI reporta onUnknown para tipos NO registrados", async () => {
+    const seenUnknown: string[] = [];
+    const context = {
+      publisher: { publish: async () => undefined },
+    };
+    const dispatcher = new EventDispatcher({
+      context,
+      onUnknown: (event) => seenUnknown.push(event.type),
+    });
+    for (const { eventType, handler } of createHandlerRegistrations()) {
+      dispatcher.register(eventType, handler);
+    }
+
+    const unknownEvent = {
+      id: "1",
+      event_uuid: "00000000-0000-4000-8000-000000000001",
+      type: "tipo.que.nadie.registra",
+      v: 1,
+      ts: "2026-07-27T00:00:00.000Z",
+      received_at: "2026-07-27T00:00:00.010Z",
+      player_uuid: null,
+      world: null,
+      x: null,
+      y: null,
+      z: null,
+      data: {},
+    };
+    await dispatcher.dispatch([unknownEvent]);
+
+    expect(seenUnknown).toEqual(["tipo.que.nadie.registra"]);
+  });
+});
