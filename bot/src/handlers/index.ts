@@ -22,3 +22,8 @@ export {
   MissingPlayerNameError as AdvancementMissingNameError,
   MissingAdvancementNameError,
 } from "./advancement-handler";
+export {
+  ChatHandler,
+  MissingPlayerNameError as ChatMissingNameError,
+  MissingChatMessageError,
+} from "./chat-handler";
