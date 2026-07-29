@@ -27,3 +27,4 @@ export {
   MissingPlayerNameError as ChatMissingNameError,
   MissingChatMessageError,
 } from "./chat-handler";
+export { TpsHandler, InvalidTpsError } from "./tps-handler";
