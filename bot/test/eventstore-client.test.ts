@@ -179,3 +179,110 @@ describe("EventStoreClient.getEvents", () => {
     expect((err as NetworkError).cause).toBe(originalError);
   });
 });
+
+describe("EventStoreClient.getLatestEventId", () => {
+  it("respuesta con latest_id string: devuelve el string", async () => {
+    const spy = vi.fn(async () =>
+      jsonResponse({ latest_id: "14028" }),
+    );
+    const client = new EventStoreClient({
+      baseUrl: BASE_URL,
+      timeoutMs: TIMEOUT,
+      fetch: spy as unknown as typeof fetch,
+    });
+
+    const result = await client.getLatestEventId();
+
+    expect(result).toBe("14028");
+    expect(spy).toHaveBeenCalledTimes(1);
+    const calledUrl = String(spy.mock.calls[0]![0]);
+    expect(calledUrl).toBe(`${BASE_URL}/events/latest_id`);
+  });
+
+  it("respuesta con latest_id null (tabla vacia): devuelve null", async () => {
+    const client = new EventStoreClient({
+      baseUrl: BASE_URL,
+      timeoutMs: TIMEOUT,
+      fetch: fetchReturning(jsonResponse({ latest_id: null })),
+    });
+
+    const result = await client.getLatestEventId();
+    expect(result).toBeNull();
+  });
+
+  it("HTTP 500: lanza HttpError con status", async () => {
+    const client = new EventStoreClient({
+      baseUrl: BASE_URL,
+      timeoutMs: TIMEOUT,
+      fetch: fetchReturning(new Response("boom", { status: 500 })),
+    });
+
+    const err = await client.getLatestEventId().catch((e) => e);
+    expect(err).toBeInstanceOf(HttpError);
+    expect((err as HttpError).status).toBe(500);
+  });
+
+  it("shape inesperado (sin campo latest_id): UnexpectedResponseError", async () => {
+    const client = new EventStoreClient({
+      baseUrl: BASE_URL,
+      timeoutMs: TIMEOUT,
+      fetch: fetchReturning(jsonResponse({ other: "value" })),
+    });
+
+    await expect(client.getLatestEventId()).rejects.toBeInstanceOf(
+      UnexpectedResponseError,
+    );
+  });
+
+  it("shape inesperado (latest_id numero): UnexpectedResponseError", async () => {
+    const client = new EventStoreClient({
+      baseUrl: BASE_URL,
+      timeoutMs: TIMEOUT,
+      fetch: fetchReturning(jsonResponse({ latest_id: 42 })),
+    });
+
+    await expect(client.getLatestEventId()).rejects.toBeInstanceOf(
+      UnexpectedResponseError,
+    );
+  });
+
+  it("timeout: lanza TimeoutError", async () => {
+    const client = new EventStoreClient({
+      baseUrl: BASE_URL,
+      timeoutMs: 50,
+      fetch: fetchHanging(),
+    });
+
+    await expect(client.getLatestEventId()).rejects.toBeInstanceOf(TimeoutError);
+  });
+
+  it("error de red: lanza NetworkError con causa", async () => {
+    const originalError = new Error("ECONNREFUSED");
+    const client = new EventStoreClient({
+      baseUrl: BASE_URL,
+      timeoutMs: TIMEOUT,
+      fetch: fetchThrowing(originalError),
+    });
+
+    const err = await client.getLatestEventId().catch((e) => e);
+    expect(err).toBeInstanceOf(NetworkError);
+    expect((err as NetworkError).cause).toBe(originalError);
+  });
+
+  it("JSON invalido: lanza InvalidJsonError", async () => {
+    const client = new EventStoreClient({
+      baseUrl: BASE_URL,
+      timeoutMs: TIMEOUT,
+      fetch: fetchReturning(
+        new Response("no soy json", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    });
+
+    await expect(client.getLatestEventId()).rejects.toBeInstanceOf(
+      InvalidJsonError,
+    );
+  });
+});

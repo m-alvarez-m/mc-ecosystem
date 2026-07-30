@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino, { type Logger } from "pino";
 import type { Config } from "../config/env";
 import { createDiscordClient } from "../discord/client";
 import { DiscordPublisher } from "../discord/discord-publisher";
@@ -7,6 +7,7 @@ import { EventDispatcher } from "../dispatcher";
 import type { EventHandler } from "../dispatcher";
 import { EventStoreClient } from "../eventstore";
 import { FileCursorStore } from "../cursor";
+import type { CursorStore } from "../cursor";
 import { PlayerNameResolver } from "../players";
 import { PollingEngine } from "../polling";
 import {
@@ -101,6 +102,59 @@ export interface App {
 }
 
 /**
+ * Dependencias de seedInitialCursor. `eventStoreClient` se toma como
+ * subset estructural (`getLatestEventId` unicamente) para que los
+ * tests puedan inyectar un stub sin fingir toda la superficie del
+ * cliente HTTP. Mismo patron que EventFetcher en PollingEngine.
+ */
+export interface SeedInitialCursorDeps {
+  cursorStore: CursorStore;
+  eventStoreClient: { getLatestEventId(): Promise<string | null> };
+  logger: Pick<Logger, "info">;
+}
+
+/**
+ * Politica de cursor inicial (T3 v1.1 — skip-to-latest).
+ *
+ * Si ya existe cursor persistido → no-op. El polling continua desde
+ * donde quedo.
+ *
+ * Si NO existe cursor → consulta el `latest_id` del Event Store:
+ *   - null (Event Store vacio): no se siembra. El polling arrancara
+ *     desde el inicio, que en este caso es "nada".
+ *   - string (hay eventos): se siembra el cursor con ese id.
+ *     Consumers evitan reprocesar la historia acumulada.
+ *
+ * Fail-fast: cualquier error de load/getLatestEventId/save se propaga
+ * y aborta el arranque (App.start rechaza -> main() exit 1). NO hay
+ * fallback al comportamiento anterior de "procesar todo desde 0" —
+ * ese es exactamente el bug que este ticket resuelve.
+ */
+export async function seedInitialCursor(
+  deps: SeedInitialCursorDeps,
+): Promise<void> {
+  const existing = await deps.cursorStore.load();
+  if (existing !== null) {
+    // Cursor ya persistido — nada que sembrar.
+    return;
+  }
+
+  const latestId = await deps.eventStoreClient.getLatestEventId();
+  if (latestId === null) {
+    deps.logger.info(
+      "Sin cursor previo y Event Store vacio — arrancando desde el inicio",
+    );
+    return;
+  }
+
+  await deps.cursorStore.save(latestId);
+  deps.logger.info(
+    { event_id: latestId },
+    "Cursor inicial sembrado al ultimo id del Event Store (skip-to-latest)",
+  );
+}
+
+/**
  * Compone el grafo de dependencias del bot. Puro y sincronico: no
  * hace login Discord, no arranca polling, no toca disco. Todo eso
  * vive en App.start().
@@ -165,6 +219,10 @@ export function composeApp(config: Config): App {
       });
       await client.login(config.discord.token);
       await ready;
+      // Politica de cursor inicial (T3): si no hay cursor previo,
+      // sembrar con MAX(id) actual para evitar reproceso masivo del
+      // historial. Si falla, aborta el arranque.
+      await seedInitialCursor({ cursorStore, eventStoreClient, logger });
       await pollingEngine.start();
     },
     stop: async () => {

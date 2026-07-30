@@ -124,6 +124,58 @@ export class EventStoreClient {
 
     return validateGetEventsResponse(payload);
   }
+
+  /**
+   * GET /events/latest_id. Devuelve el `id` más alto que la api tenga
+   * indexado en `events`, o `null` si la tabla está vacía.
+   *
+   * Uso: sembrar el cursor inicial de un consumer recién desplegado
+   * para evitar reprocesar toda la historia (T3 v1.1). Semántica del
+   * response idéntica a la del endpoint: string opaco (BIGINT) o null.
+   *
+   * Mismos errores tipados que getEvents() — cero retries, cero
+   * fallbacks. El caller decide si abortar el arranque ante fallo.
+   */
+  async getLatestEventId(): Promise<string | null> {
+    const url = new URL(`${this.baseUrl}/events/latest_id`);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new TimeoutError(this.timeoutMs, { cause: err });
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      const cause = err instanceof Error ? err : undefined;
+      throw new NetworkError(message, cause ? { cause } : undefined);
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new HttpError(response.status, body);
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      const cause = err instanceof Error ? err : undefined;
+      throw new InvalidJsonError(message, cause ? { cause } : undefined);
+    }
+
+    return validateLatestIdResponse(payload);
+  }
 }
 
 // --------------------------------------------------------------------
@@ -164,6 +216,21 @@ function validateGetEventsResponse(payload: unknown): GetEventsResponse {
 
 function isObject(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null && !Array.isArray(x);
+}
+
+/**
+ * Valida la respuesta de GET /events/latest_id. Contrato:
+ *   { "latest_id": string | null }
+ */
+function validateLatestIdResponse(payload: unknown): string | null {
+  if (!isObject(payload)) {
+    throw new UnexpectedResponseError("la respuesta no es un objeto");
+  }
+  const raw = payload["latest_id"];
+  if (raw !== null && typeof raw !== "string") {
+    throw new UnexpectedResponseError("`latest_id` no es string ni null");
+  }
+  return raw;
 }
 
 function isEventRecord(x: unknown): x is EventRecord {

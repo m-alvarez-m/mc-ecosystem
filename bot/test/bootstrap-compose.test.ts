@@ -1,8 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   composeApp,
   createHandlerRegistrations,
+  seedInitialCursor,
 } from "../src/bootstrap/compose";
+import type { CursorData, CursorStore } from "../src/cursor";
 import type { Config } from "../src/config/env";
 import { DiscordPublisher } from "../src/discord/discord-publisher";
 import { EventDispatcher } from "../src/dispatcher";
@@ -228,5 +230,131 @@ describe("composeApp", () => {
     await dispatcher.dispatch([unknownEvent]);
 
     expect(seenUnknown).toEqual(["tipo.que.nadie.registra"]);
+  });
+});
+
+// ------------------------------------------------------------------
+// seedInitialCursor (T3 v1.1)
+// ------------------------------------------------------------------
+
+function silentLogger(): Pick<import("pino").Logger, "info"> & {
+  info: ReturnType<typeof vi.fn>;
+} {
+  return { info: vi.fn() };
+}
+
+function fakeCursorStore(overrides: {
+  loadResult?: CursorData | null;
+  loadError?: Error;
+  saveError?: Error;
+}): CursorStore & {
+  load: ReturnType<typeof vi.fn>;
+  save: ReturnType<typeof vi.fn>;
+} {
+  const load = vi.fn(async () => {
+    if (overrides.loadError !== undefined) throw overrides.loadError;
+    return overrides.loadResult ?? null;
+  });
+  const save = vi.fn(async () => {
+    if (overrides.saveError !== undefined) throw overrides.saveError;
+  });
+  return { load, save } as unknown as CursorStore & {
+    load: ReturnType<typeof vi.fn>;
+    save: ReturnType<typeof vi.fn>;
+  };
+}
+
+function fakeLatestIdFetcher(
+  overrides: { result?: string | null; error?: Error },
+): {
+  getLatestEventId: ReturnType<typeof vi.fn>;
+} {
+  const getLatestEventId = vi.fn(async () => {
+    if (overrides.error !== undefined) throw overrides.error;
+    return overrides.result ?? null;
+  });
+  return { getLatestEventId };
+}
+
+describe("seedInitialCursor", () => {
+  it("cursor existente: NO consulta latest_id, NO guarda cursor", async () => {
+    const cursorStore = fakeCursorStore({
+      loadResult: { event_id: "500", updated_at: "2026-07-30T00:00:00Z" },
+    });
+    const eventStoreClient = fakeLatestIdFetcher({});
+    const logger = silentLogger();
+
+    await seedInitialCursor({ cursorStore, eventStoreClient, logger });
+
+    expect(cursorStore.load).toHaveBeenCalledOnce();
+    expect(eventStoreClient.getLatestEventId).not.toHaveBeenCalled();
+    expect(cursorStore.save).not.toHaveBeenCalled();
+    expect(logger.info).not.toHaveBeenCalled();
+  });
+
+  it("sin cursor + latest_id string: consulta UNA vez y guarda el cursor con ese id", async () => {
+    const cursorStore = fakeCursorStore({ loadResult: null });
+    const eventStoreClient = fakeLatestIdFetcher({ result: "14028" });
+    const logger = silentLogger();
+
+    await seedInitialCursor({ cursorStore, eventStoreClient, logger });
+
+    expect(cursorStore.load).toHaveBeenCalledOnce();
+    expect(eventStoreClient.getLatestEventId).toHaveBeenCalledOnce();
+    expect(cursorStore.save).toHaveBeenCalledOnce();
+    expect(cursorStore.save.mock.calls[0]![0]).toBe("14028");
+    // Log informativo con el id sembrado.
+    expect(logger.info).toHaveBeenCalledOnce();
+    expect(logger.info.mock.calls[0]![0]).toEqual({ event_id: "14028" });
+  });
+
+  it("sin cursor + latest_id null: NO guarda cursor, log informativo", async () => {
+    const cursorStore = fakeCursorStore({ loadResult: null });
+    const eventStoreClient = fakeLatestIdFetcher({ result: null });
+    const logger = silentLogger();
+
+    await seedInitialCursor({ cursorStore, eventStoreClient, logger });
+
+    expect(eventStoreClient.getLatestEventId).toHaveBeenCalledOnce();
+    expect(cursorStore.save).not.toHaveBeenCalled();
+    expect(logger.info).toHaveBeenCalledOnce();
+    // Mensaje explícito de "vacío".
+    expect(String(logger.info.mock.calls[0]![0])).toMatch(/vac[ií]o|empty/i);
+  });
+
+  it("fallo en cursorStore.load: propaga, NO consulta latest_id", async () => {
+    const boom = new Error("load boom");
+    const cursorStore = fakeCursorStore({ loadError: boom });
+    const eventStoreClient = fakeLatestIdFetcher({});
+    const logger = silentLogger();
+
+    await expect(
+      seedInitialCursor({ cursorStore, eventStoreClient, logger }),
+    ).rejects.toBe(boom);
+    expect(eventStoreClient.getLatestEventId).not.toHaveBeenCalled();
+    expect(cursorStore.save).not.toHaveBeenCalled();
+  });
+
+  it("fallo en getLatestEventId: propaga (fail-fast del arranque), NO guarda cursor", async () => {
+    const apiBoom = new Error("api down");
+    const cursorStore = fakeCursorStore({ loadResult: null });
+    const eventStoreClient = fakeLatestIdFetcher({ error: apiBoom });
+    const logger = silentLogger();
+
+    await expect(
+      seedInitialCursor({ cursorStore, eventStoreClient, logger }),
+    ).rejects.toBe(apiBoom);
+    expect(cursorStore.save).not.toHaveBeenCalled();
+  });
+
+  it("fallo en cursorStore.save: propaga", async () => {
+    const saveBoom = new Error("disk full");
+    const cursorStore = fakeCursorStore({ loadResult: null, saveError: saveBoom });
+    const eventStoreClient = fakeLatestIdFetcher({ result: "999" });
+    const logger = silentLogger();
+
+    await expect(
+      seedInitialCursor({ cursorStore, eventStoreClient, logger }),
+    ).rejects.toBe(saveBoom);
   });
 });
