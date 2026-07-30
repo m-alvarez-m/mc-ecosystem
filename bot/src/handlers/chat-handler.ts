@@ -1,6 +1,7 @@
 import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
+import { sanitizeDiscordMessage } from "../discord/sanitize-discord-message";
 import { MissingPlayerUuidError } from "./errors";
 
 // ChatHandler: publica cada mensaje de chat del servidor.
@@ -47,7 +48,7 @@ export class ChatHandler implements EventHandler {
       throw new MissingPlayerUuidError(EVENT_TYPE, event.event_uuid);
     }
     const name = await context.playerNameResolver.resolve(event.player_uuid);
-    const message = extractChatMessage(event);
+    const message = sanitizeDiscordMessage(extractChatMessage(event));
 
     await context.publisher.publish({
       title: TITLE,

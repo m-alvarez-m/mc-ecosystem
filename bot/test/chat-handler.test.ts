@@ -291,4 +291,27 @@ describe("ChatHandler", () => {
       { title: "Chat", body: "Vancorbus: hola mundo minecraft" },
     ]);
   });
+
+  it("sanitiza menciones de Discord antes de publicar (T1)", async () => {
+    const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
+    const h = new ChatHandler();
+    await h.handle(
+      fakeContext(publisher, resolver),
+      chatEvent({
+        data: {
+          content: "hola @everyone y @here, <@1> <@!2> <@&3>",
+        },
+      }),
+    );
+
+    const body = publisher.publish.mock.calls[0]![0].body as string;
+    // El texto contiene los tokens neutralizados; no queda ninguna
+    // mención parseable por Discord.
+    expect(body).toContain("Vancorbus: ");
+    expect(body).not.toMatch(/@everyone|@here|<@[!&]?\d+>/);
+    // Y el nombre resuelto NO se sanitiza como si fuese texto de usuario:
+    // "Vancorbus" no contiene ZWSP.
+    expect(body.startsWith("Vancorbus: ")).toBe(true);
+  });
 });

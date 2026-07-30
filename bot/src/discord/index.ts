@@ -12,3 +12,5 @@ export {
   PublishError,
   InvalidPayloadError,
 } from "./errors";
+
+export { sanitizeDiscordMessage } from "./sanitize-discord-message";
