@@ -53,11 +53,18 @@ function makeRow(id: string, overrides: Partial<FakeRow> = {}): FakeRow {
 
 // Construye una app Fastify con la misma config de ajv-formats que
 // index.ts. Registra eventRoutes con el pool fake que se le pase.
-async function makeApp(pool: EventRoutesDeps["pool"]) {
+//
+// `pool` en tests de lectura sólo necesita `query`; el `connect` es un
+// stub que nunca se ejecuta (GET /events no abre transacciones). Se
+// añade sólo para satisfacer el tipo `Pick<Pool, "query" | "connect">`
+// requerido por EventRoutesDeps tras la Etapa 1.
+async function makeApp(pool: Pick<EventRoutesDeps["pool"], "query">) {
   const app = Fastify({
     ajv: { plugins: [addFormats as unknown as AjvPlugin] },
   });
-  await app.register(eventRoutes, { pool });
+  await app.register(eventRoutes, {
+    pool: { query: pool.query, connect: vi.fn() as unknown as EventRoutesDeps["pool"]["connect"] },
+  });
   return app;
 }
 
