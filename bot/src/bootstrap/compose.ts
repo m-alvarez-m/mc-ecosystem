@@ -48,13 +48,16 @@ import type { Client } from "discord.js";
  * esta lista, lo cual es exactamente el tipo de cambio que quieres
  * ver en revision de codigo.
  */
-export function createHandlerRegistrations(): ReadonlyArray<{
+export function createHandlerRegistrations(config: Config): ReadonlyArray<{
   eventType: string;
   handler: EventHandler;
 }> {
   // Tipos alineados con docs/event-catalog.md. Cambiar cualquiera
   // requiere tambien cambiar el EVENT_TYPE del handler correspondiente,
   // porque el dispatcher.register() verifica handler.supports(type).
+  //
+  // Handlers con configuracion propia reciben aqui su subset via
+  // constructor. TpsHandler recibe el umbral de alerta (T2 v1.1).
   return [
     { eventType: "server.start", handler: new ServerStartedHandler() },
     { eventType: "server.stop", handler: new ServerStoppedHandler() },
@@ -63,7 +66,10 @@ export function createHandlerRegistrations(): ReadonlyArray<{
     { eventType: "player.death", handler: new PlayerDeathHandler() },
     { eventType: "advancement.done", handler: new AdvancementHandler() },
     { eventType: "chat.message", handler: new ChatHandler() },
-    { eventType: "server.tps_sample", handler: new TpsHandler() },
+    {
+      eventType: "server.tps_sample",
+      handler: new TpsHandler({ alertThreshold: config.tps.alertThreshold }),
+    },
     { eventType: "backup.done", handler: new BackupHandler() },
   ];
 }
@@ -119,7 +125,7 @@ export function composeApp(config: Config): App {
   // Dispatcher + handlers
   const context: DispatchContext = { publisher, playerNameResolver };
   const dispatcher = new EventDispatcher({ context });
-  for (const { eventType, handler } of createHandlerRegistrations()) {
+  for (const { eventType, handler } of createHandlerRegistrations(config)) {
     dispatcher.register(eventType, handler);
   }
 

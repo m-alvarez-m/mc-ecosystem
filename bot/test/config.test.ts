@@ -14,6 +14,7 @@ const ALL_VARS = [
   "HTTP_TIMEOUT_MS",
   "CURSOR_FILE",
   "POLL_INTERVAL_MS",
+  "TPS_ALERT_THRESHOLD",
 ] as const;
 
 function setBaseValid(): void {
@@ -53,6 +54,8 @@ describe("loadConfig", () => {
     expect(config.eventStore.timeoutMs).toBe(10_000);
     expect(config.cursor.filePath).toBe("/var/lib/pulso/cursor.json");
     expect(config.polling.intervalMs).toBe(5000);
+    // TPS_ALERT_THRESHOLD ausente -> default 18.
+    expect(config.tps.alertThreshold).toBe(18);
   });
 
   it("acepta HTTP_TIMEOUT_MS custom cuando es entero positivo", () => {
@@ -110,5 +113,37 @@ describe("loadConfig", () => {
     process.env.POLL_INTERVAL_MS = "0";
 
     expect(() => loadConfig()).toThrow(/POLL_INTERVAL_MS invalido/);
+  });
+
+  it("acepta TPS_ALERT_THRESHOLD custom (entero)", () => {
+    setBaseValid();
+    process.env.TPS_ALERT_THRESHOLD = "15";
+
+    const config = loadConfig();
+    expect(config.tps.alertThreshold).toBe(15);
+  });
+
+  it("acepta TPS_ALERT_THRESHOLD custom (decimal)", () => {
+    setBaseValid();
+    process.env.TPS_ALERT_THRESHOLD = "17.5";
+
+    const config = loadConfig();
+    expect(config.tps.alertThreshold).toBe(17.5);
+  });
+
+  it("aborta cuando TPS_ALERT_THRESHOLD no es numero finito positivo", () => {
+    setBaseValid();
+    process.env.TPS_ALERT_THRESHOLD = "no-es-numero";
+
+    expect(() => loadConfig()).toThrow(/TPS_ALERT_THRESHOLD invalido/);
+  });
+
+  it("aborta cuando TPS_ALERT_THRESHOLD es cero o negativo", () => {
+    setBaseValid();
+    process.env.TPS_ALERT_THRESHOLD = "0";
+    expect(() => loadConfig()).toThrow(/TPS_ALERT_THRESHOLD invalido/);
+
+    process.env.TPS_ALERT_THRESHOLD = "-5";
+    expect(() => loadConfig()).toThrow(/TPS_ALERT_THRESHOLD invalido/);
   });
 });

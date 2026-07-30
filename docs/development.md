@@ -66,7 +66,13 @@ POLL_INTERVAL_MS=5000
 Opcional:
 ```
 HTTP_TIMEOUT_MS=10000
+TPS_ALERT_THRESHOLD=18
 ```
+
+`TPS_ALERT_THRESHOLD` (default `18`): TPS por debajo del cual el bot
+publica alerta de degradación. Samples con TPS ≥ umbral son silencio
+absoluto (evita spam del sample cada 60s). Acepta decimales
+(`17.5`, `15.8`).
 
 **Nunca commit `.env`**. `bot/.gitignore` ya lo cubre.
 

@@ -37,6 +37,7 @@ function fakeConfig(): Config {
     eventStore: { baseUrl: "http://api:3000", timeoutMs: 10_000 },
     cursor: { filePath: "/tmp/pulso/cursor.json" },
     polling: { intervalMs: 5_000 },
+    tps: { alertThreshold: 18 },
   };
 }
 
@@ -70,17 +71,17 @@ const EXPECTED_HANDLER_CTORS = [
 
 describe("createHandlerRegistrations", () => {
   it("registra exactamente 9 handlers", () => {
-    const regs = createHandlerRegistrations();
+    const regs = createHandlerRegistrations(fakeConfig());
     expect(regs).toHaveLength(9);
   });
 
   it("cubre los tipos de evento esperados y en el orden esperado", () => {
-    const types = createHandlerRegistrations().map((r) => r.eventType);
+    const types = createHandlerRegistrations(fakeConfig()).map((r) => r.eventType);
     expect(types).toEqual([...EXPECTED_TYPES]);
   });
 
   it("cada tipo mapea a una instancia unica (sin duplicados de tipo ni handler)", () => {
-    const regs = createHandlerRegistrations();
+    const regs = createHandlerRegistrations(fakeConfig());
     const seenTypes = new Set(regs.map((r) => r.eventType));
     const seenHandlers = new Set(regs.map((r) => r.handler));
     expect(seenTypes.size).toBe(regs.length);
@@ -88,21 +89,21 @@ describe("createHandlerRegistrations", () => {
   });
 
   it("cada handler es instancia de la clase esperada", () => {
-    const regs = createHandlerRegistrations();
+    const regs = createHandlerRegistrations(fakeConfig());
     for (let i = 0; i < regs.length; i++) {
       expect(regs[i]!.handler).toBeInstanceOf(EXPECTED_HANDLER_CTORS[i]!);
     }
   });
 
   it("cada handler soporta el tipo bajo el que se registra (supports() -> true)", () => {
-    for (const { eventType, handler } of createHandlerRegistrations()) {
+    for (const { eventType, handler } of createHandlerRegistrations(fakeConfig())) {
       expect(handler.supports(eventType)).toBe(true);
     }
   });
 
   it("cada llamada devuelve INSTANCIAS nuevas (aisla estados en tests)", () => {
-    const first = createHandlerRegistrations();
-    const second = createHandlerRegistrations();
+    const first = createHandlerRegistrations(fakeConfig());
+    const second = createHandlerRegistrations(fakeConfig());
     for (let i = 0; i < first.length; i++) {
       expect(first[i]!.handler).not.toBe(second[i]!.handler);
     }
@@ -163,7 +164,7 @@ describe("composeApp", () => {
       context,
       onUnknown: (event) => seenUnknown.push(event.type),
     });
-    for (const { eventType, handler } of createHandlerRegistrations()) {
+    for (const { eventType, handler } of createHandlerRegistrations(fakeConfig())) {
       dispatcher.register(eventType, handler);
     }
 
@@ -206,7 +207,7 @@ describe("composeApp", () => {
       context,
       onUnknown: (event) => seenUnknown.push(event.type),
     });
-    for (const { eventType, handler } of createHandlerRegistrations()) {
+    for (const { eventType, handler } of createHandlerRegistrations(fakeConfig())) {
       dispatcher.register(eventType, handler);
     }
 

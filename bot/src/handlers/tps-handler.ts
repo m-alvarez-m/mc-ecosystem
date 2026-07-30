@@ -2,18 +2,22 @@ import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
 
-// TpsHandler: publica el TPS (ticks per second) actual del servidor
-// cuando llega un evento de muestreo.
+// TpsHandler: emite alerta cuando el TPS del servidor baja del umbral
+// configurado (T2 del backlog v1.1).
 //
-// El handler es "puro reporte": no calcula promedios, no aplica
-// umbrales, no clasifica el valor como bueno o malo. Muestra el
-// numero tal cual. Si en el futuro se quiere alertar de TPS bajos,
-// vive fuera (handler propio con umbral configurable, dashboard,
-// alerta externa).
+// Filosofía: los samples sanos son silencio. Un canal de Discord que
+// recibe "TPS actual: 19.85" cada 60s es inservible. El handler
+// publica sólo cuando hay que enterarse — TPS estrictamente por
+// debajo del umbral se traduce en un mensaje que comunica
+// degradación clara.
+//
+// La decisión vive AQUI, dentro del handler. Sin middleware, sin
+// filtro en el dispatcher, sin lógica en el polling. Otros handlers
+// no se ven afectados.
 
 const EVENT_TYPE = "server.tps_sample";
 
-const TITLE = "Estado del servidor";
+const ALERT_TITLE = "Rendimiento degradado";
 
 /**
  * Error del handler cuando el payload no permite construir el mensaje.
@@ -32,16 +36,35 @@ export class InvalidTpsError extends Error {
   }
 }
 
+export interface TpsHandlerOptions {
+  /**
+   * Umbral debajo del cual se publica alerta (`tps < alertThreshold`).
+   * Igual o mayor al umbral = silencio. Se acepta cualquier número
+   * finito positivo (permite decimales: 18, 17.5, 15.8...).
+   */
+  alertThreshold: number;
+}
+
 export class TpsHandler implements EventHandler {
+  private readonly alertThreshold: number;
+
+  constructor(options: TpsHandlerOptions) {
+    this.alertThreshold = options.alertThreshold;
+  }
+
   supports(eventType: string): boolean {
     return eventType === EVENT_TYPE;
   }
 
   async handle(context: DispatchContext, event: EventRecord): Promise<void> {
     const tps = extractTps(event);
+    if (tps >= this.alertThreshold) {
+      // Sample sano: silencio absoluto. No publish, no log, no error.
+      return;
+    }
     await context.publisher.publish({
-      title: TITLE,
-      body: `TPS actual: ${String(tps)}`,
+      title: ALERT_TITLE,
+      body: `El servidor está lento: TPS ${String(tps)} (umbral ${String(this.alertThreshold)}).`,
     });
   }
 }

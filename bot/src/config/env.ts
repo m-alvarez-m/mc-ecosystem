@@ -26,6 +26,15 @@ export interface Config {
   polling: {
     intervalMs: number;
   };
+  tps: {
+    /**
+     * Umbral por debajo del cual TpsHandler emite alerta de
+     * degradacion. TPS >= umbral -> silencio (evita 1440 mensajes/dia
+     * de samples sanos). TPS < umbral -> se publica.
+     * Default: 18 (vanilla objetivo = 20; margen razonable de tolerancia).
+     */
+    alertThreshold: number;
+  };
 }
 
 interface RequiredVar {
@@ -47,6 +56,11 @@ const REQUIRED: RequiredVar[] = [
 // mas margen amplio para picos. El consumidor puede subirlo si en el
 // futuro se hace long-polling con timeouts >30s.
 const DEFAULT_HTTP_TIMEOUT_MS = 10_000;
+
+// Default 18: vanilla objetivo = 20 TPS; ~10% de tolerancia. Debajo,
+// se considera degradacion y TpsHandler emite alerta. Aceptamos
+// decimales para umbrales finos (17.5, 15.8, etc.).
+const DEFAULT_TPS_ALERT_THRESHOLD = 18;
 
 export function loadConfig(): Config {
   const missing: string[] = [];
@@ -96,6 +110,18 @@ export function loadConfig(): Config {
     );
   }
 
+  const rawTpsThreshold = process.env.TPS_ALERT_THRESHOLD;
+  let tpsAlertThreshold = DEFAULT_TPS_ALERT_THRESHOLD;
+  if (rawTpsThreshold !== undefined && rawTpsThreshold.trim().length > 0) {
+    const parsed = Number(rawTpsThreshold);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new Error(
+        `TPS_ALERT_THRESHOLD invalido: "${rawTpsThreshold}" (debe ser numero finito positivo)`,
+      );
+    }
+    tpsAlertThreshold = parsed;
+  }
+
   return {
     discord: {
       token: process.env.DISCORD_BOT_TOKEN!,
@@ -106,5 +132,6 @@ export function loadConfig(): Config {
     eventStore: { baseUrl: rawBaseUrl, timeoutMs },
     cursor: { filePath: process.env.CURSOR_FILE! },
     polling: { intervalMs: pollIntervalMs },
+    tps: { alertThreshold: tpsAlertThreshold },
   };
 }
