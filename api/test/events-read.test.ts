@@ -226,3 +226,49 @@ describe("GET /events", () => {
     expect(evt.data).not.toBeNull();
   });
 });
+
+describe("GET /events/latest_id", () => {
+  it("con eventos: devuelve {latest_id: string} con el MAX(id)", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ latest_id: "14028" }] });
+    const app = await makeApp({ query });
+
+    const res = await app.inject({ method: "GET", url: "/events/latest_id" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ latest_id: "14028" });
+
+    expect(query).toHaveBeenCalledOnce();
+    const [sql] = query.mock.calls[0]!;
+    expect(String(sql)).toMatch(/SELECT[\s\S]*MAX\(id\)::text[\s\S]*FROM events/i);
+  });
+
+  it("sin eventos (tabla vacía): devuelve {latest_id: null}", async () => {
+    // Postgres retorna 1 row con MAX() = null cuando la tabla está vacía.
+    const query = vi.fn().mockResolvedValue({ rows: [{ latest_id: null }] });
+    const app = await makeApp({ query });
+
+    const res = await app.inject({ method: "GET", url: "/events/latest_id" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ latest_id: null });
+  });
+
+  it("shape del contrato: sólo el campo latest_id (nada extra)", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [{ latest_id: "42" }] });
+    const app = await makeApp({ query });
+
+    const res = await app.inject({ method: "GET", url: "/events/latest_id" });
+    const body = res.json() as Record<string, unknown>;
+
+    expect(Object.keys(body).sort()).toEqual(["latest_id"]);
+  });
+
+  it("error de base de datos: Fastify responde 500", async () => {
+    const query = vi.fn().mockRejectedValue(new Error("db down"));
+    const app = await makeApp({ query });
+
+    const res = await app.inject({ method: "GET", url: "/events/latest_id" });
+
+    expect(res.statusCode).toBe(500);
+  });
+});

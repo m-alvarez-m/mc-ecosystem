@@ -172,6 +172,17 @@ export async function eventRoutes(app: FastifyInstance, deps: EventRoutesDeps) {
       return { events, last_id: lastId };
     }
   );
+
+  // Endpoint específico para sembrar el cursor inicial de un consumer
+  // recién desplegado (T3 v1.1). Cero paginación, cero filtros — sólo
+  // el MAX(id) actual o null si la tabla está vacía. `id::text` blinda
+  // la serialización como string igual que GET /events.
+  app.get("/events/latest_id", async () => {
+    const result = await pool.query<{ latest_id: string | null }>(
+      "SELECT MAX(id)::text AS latest_id FROM events"
+    );
+    return { latest_id: result.rows[0]?.latest_id ?? null };
+  });
 }
 
 // Path transaccional: session.start con identidad válida.
