@@ -1,20 +1,21 @@
 import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
-import { MissingPlayerNameError } from "./errors";
+import { MissingPlayerUuidError } from "./errors";
 
 // PlayerJoinedHandler: publica cuando un jugador se une al servidor.
 //
-// A diferencia de los handlers de server.start / server.stop, este
-// consume el payload del evento (necesita el nombre del jugador para
-// construir el mensaje). Si el payload no cumple lo minimo requerido,
-// lanza MissingPlayerNameError (definido en ./errors, compartido con
-// otros handlers) y NO publica nada — mejor un error tipado propagable
-// al dispatcher que un mensaje "undefined se ha unido al servidor" en
-// Discord.
+// Resuelve el nombre por `context.playerNameResolver.resolve(uuid)`.
+// El nombre NO se lee del payload del evento — el catalogo v1 no lo
+// emite en `data`. La identidad canonica vive en la tabla `players`
+// del api (poblada por session.start con data.name), y el resolver la
+// obtiene por HTTP con cache (Etapa 4 del plan P0-2).
+//
+// Si el evento llega sin player_uuid a nivel raiz, lanza
+// MissingPlayerUuidError. Si el resolver falla (404, timeout, etc.),
+// el error tipado se propaga: mejor cursor stuck que "undefined se ha
+// unido al servidor" en Discord.
 
-// Tipo del catalogo oficial (docs/event-catalog.md). Conceptualmente
-// "el jugador se conecto"; el catalogo lo llama session.start.
 const EVENT_TYPE = "session.start";
 
 const TITLE = "Jugador conectado";
@@ -25,32 +26,13 @@ export class PlayerJoinedHandler implements EventHandler {
   }
 
   async handle(context: DispatchContext, event: EventRecord): Promise<void> {
-    const name = extractPlayerName(event);
+    if (event.player_uuid === null) {
+      throw new MissingPlayerUuidError(EVENT_TYPE, event.event_uuid);
+    }
+    const name = await context.playerNameResolver.resolve(event.player_uuid);
     await context.publisher.publish({
       title: TITLE,
       body: `${name} se ha unido al servidor.`,
     });
   }
-}
-
-/**
- * Extrae el nombre del jugador desde `event.data.name`. Lanza
- * MissingPlayerNameError si:
- *  - `data.name` no existe;
- *  - no es un string;
- *  - es un string vacio (o solo whitespace).
- *
- * Whitespace-only tambien se rechaza: publicar " se ha unido al
- * servidor." delata un bug aguas arriba mejor que enmascararlo.
- */
-function extractPlayerName(event: EventRecord): string {
-  const raw = event.data["name"];
-  if (typeof raw !== "string") {
-    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
-  }
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
-  }
-  return trimmed;
 }

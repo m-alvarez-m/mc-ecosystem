@@ -3,39 +3,61 @@ import {
   ChatHandler,
   MissingChatMessageError,
 } from "../src/handlers/chat-handler";
-import { MissingPlayerNameError } from "../src/handlers/errors";
+import { MissingPlayerUuidError } from "../src/handlers/errors";
 import type { DispatchContext } from "../src/context";
 import type { Publisher, PublishPayload } from "../src/publisher";
 import type { EventRecord } from "../src/eventstore";
-
-// Tests de ChatHandler.
-// Sin Discord, sin red: publisher fake y contexto minimo.
+import {
+  PlayerNameResolver,
+  PlayerNotFoundError,
+  PlayerLookupHttpError,
+} from "../src/players";
 
 function fakePublisher(): Publisher & { publish: ReturnType<typeof vi.fn> } {
   return { publish: vi.fn(async () => undefined) };
 }
 
-function fakeContext(publisher: Publisher): DispatchContext {
-  return { publisher };
+function fakeResolverFromMap(
+  map: Record<string, string>,
+): PlayerNameResolver & { resolve: ReturnType<typeof vi.fn> } {
+  const resolve = vi.fn(async (uuid: string) => {
+    if (uuid in map) return map[uuid]!;
+    throw new PlayerNotFoundError(uuid);
+  });
+  return { resolve } as unknown as PlayerNameResolver & {
+    resolve: ReturnType<typeof vi.fn>;
+  };
 }
 
+function fakeContext(
+  publisher: Publisher,
+  resolver: PlayerNameResolver,
+): DispatchContext {
+  return { publisher, playerNameResolver: resolver };
+}
+
+const VANCORBUS = "71804e99-f2aa-32dc-bfcb-0ea5cfdda708";
+
 function chatEvent(
-  data: Record<string, unknown>,
-  uuid = "aaaa",
+  overrides: {
+    playerUuid?: string | null;
+    eventUuid?: string;
+    data?: Record<string, unknown>;
+  } = {},
 ): EventRecord {
   return {
     id: "42",
-    event_uuid: `00000000-0000-4000-8000-${uuid.padStart(12, "0")}`,
+    event_uuid: overrides.eventUuid ?? "00000000-0000-4000-8000-000000000001",
     type: "chat.message",
     v: 1,
     ts: "2026-07-27T00:00:00.000Z",
     received_at: "2026-07-27T00:00:00.010Z",
-    player_uuid: "71804e99-f2aa-32dc-bfcb-0ea5cfdda708",
+    player_uuid: overrides.playerUuid === undefined ? VANCORBUS : overrides.playerUuid,
     world: null,
     x: null,
     y: null,
     z: null,
-    data,
+    data: overrides.data ?? { content: "hola mundo", length: 10 },
   };
 }
 
@@ -49,30 +71,43 @@ describe("ChatHandler", () => {
     expect(h.supports("CHAT.MESSAGE")).toBe(false);
   });
 
-  it("publicacion correcta con nombre y mensaje", async () => {
+  it("caso feliz: resolver + content → body '<nombre>: <mensaje>'", async () => {
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
     const h = new ChatHandler();
+
     await h.handle(
-      fakeContext(publisher),
-      chatEvent({ name: "Vancorbus", content: "hola mundo" }),
+      fakeContext(publisher, resolver),
+      chatEvent({ data: { content: "hola mundo" } }),
     );
 
+    expect(resolver.resolve).toHaveBeenCalledWith(VANCORBUS);
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Chat",
       body: "Vancorbus: hola mundo",
     });
   });
 
-  it("mensaje esperado para varios usuarios", async () => {
+  it("distintos player_uuid resuelven a distintos nombres", async () => {
+    const other = "8a80a72d-fb01-3e17-9a96-2b801d16f82d";
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({
+      [VANCORBUS]: "Pacman26",
+      [other]: "Elrid",
+    });
     const h = new ChatHandler();
+
     await h.handle(
-      fakeContext(publisher),
-      chatEvent({ name: "Pacman26", content: "por aqui" }),
+      fakeContext(publisher, resolver),
+      chatEvent({ data: { content: "por aqui" } }),
     );
     await h.handle(
-      fakeContext(publisher),
-      chatEvent({ name: "Elrid", content: "voy" }),
+      fakeContext(publisher, resolver),
+      chatEvent({
+        playerUuid: other,
+        eventUuid: "00000000-0000-4000-8000-000000000002",
+        data: { content: "voy" },
+      }),
     );
 
     expect(publisher.publish.mock.calls[0]![0]).toEqual({
@@ -85,12 +120,13 @@ describe("ChatHandler", () => {
     });
   });
 
-  it("trimea whitespace del nombre pero NO del mensaje", async () => {
+  it("NO trimea el content (es contenido de usuario)", async () => {
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
     const h = new ChatHandler();
     await h.handle(
-      fakeContext(publisher),
-      chatEvent({ name: "  Vancorbus  ", content: "  hola  " }),
+      fakeContext(publisher, resolver),
+      chatEvent({ data: { content: "  hola  " } }),
     );
 
     expect(publisher.publish).toHaveBeenCalledWith({
@@ -101,10 +137,11 @@ describe("ChatHandler", () => {
 
   it("no filtra contenido: mensajes que parecen comandos se publican tal cual", async () => {
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "V" });
     const h = new ChatHandler();
     await h.handle(
-      fakeContext(publisher),
-      chatEvent({ name: "V", content: "/tp Vancorbus" }),
+      fakeContext(publisher, resolver),
+      chatEvent({ data: { content: "/tp Vancorbus" } }),
     );
 
     expect(publisher.publish).toHaveBeenCalledWith({
@@ -113,24 +150,29 @@ describe("ChatHandler", () => {
     });
   });
 
-  it("no trunca mensajes largos: se publica el mensaje completo", async () => {
+  it("no trunca mensajes largos", async () => {
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "V" });
     const h = new ChatHandler();
     const longMessage = "x".repeat(5000);
     await h.handle(
-      fakeContext(publisher),
-      chatEvent({ name: "V", content: longMessage }),
+      fakeContext(publisher, resolver),
+      chatEvent({ data: { content: longMessage } }),
     );
 
     const call = publisher.publish.mock.calls[0]![0] as PublishPayload;
     expect(call.body).toBe(`V: ${longMessage}`);
-    expect(call.body.length).toBe(5000 + 3); // "V: " (3 chars) + 5000
+    expect(call.body.length).toBe(5000 + 3);
   });
 
-  it("mensaje solo con whitespace es contenido valido y se publica", async () => {
+  it("content solo whitespace es contenido valido y se publica", async () => {
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "V" });
     const h = new ChatHandler();
-    await h.handle(fakeContext(publisher), chatEvent({ name: "V", content: "   " }));
+    await h.handle(
+      fakeContext(publisher, resolver),
+      chatEvent({ data: { content: "   " } }),
+    );
 
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Chat",
@@ -138,76 +180,83 @@ describe("ChatHandler", () => {
     });
   });
 
-  it("data.name ausente: MissingPlayerNameError y NO publica", async () => {
+  it("player_uuid null: MissingPlayerUuidError, resolver NO se llama, publisher NO se llama", async () => {
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({});
     const h = new ChatHandler();
+    const event = chatEvent({ playerUuid: null, eventUuid: "00000000-0000-4000-8000-cafecafecafe" });
 
-    await expect(
-      h.handle(fakeContext(publisher), chatEvent({ content: "hola" })),
-    ).rejects.toBeInstanceOf(MissingPlayerNameError);
-    expect(publisher.publish).not.toHaveBeenCalled();
-  });
-
-  it("data.name no-string o vacio: MissingPlayerNameError", async () => {
-    const publisher = fakePublisher();
-    const h = new ChatHandler();
-
-    await expect(
-      h.handle(fakeContext(publisher), chatEvent({ name: 42, content: "hola" })),
-    ).rejects.toBeInstanceOf(MissingPlayerNameError);
-    await expect(
-      h.handle(fakeContext(publisher), chatEvent({ name: "  ", content: "hola" })),
-    ).rejects.toBeInstanceOf(MissingPlayerNameError);
-    expect(publisher.publish).not.toHaveBeenCalled();
-  });
-
-  it("data.content ausente: MissingChatMessageError y NO publica", async () => {
-    const publisher = fakePublisher();
-    const h = new ChatHandler();
-
-    await expect(
-      h.handle(fakeContext(publisher), chatEvent({ name: "V" })),
-    ).rejects.toBeInstanceOf(MissingChatMessageError);
-    expect(publisher.publish).not.toHaveBeenCalled();
-  });
-
-  it("data.content no-string o vacio (length 0): MissingChatMessageError", async () => {
-    const publisher = fakePublisher();
-    const h = new ChatHandler();
-
-    await expect(
-      h.handle(fakeContext(publisher), chatEvent({ name: "V", content: 42 })),
-    ).rejects.toBeInstanceOf(MissingChatMessageError);
-    await expect(
-      h.handle(fakeContext(publisher), chatEvent({ name: "V", content: "" })),
-    ).rejects.toBeInstanceOf(MissingChatMessageError);
-    expect(publisher.publish).not.toHaveBeenCalled();
-  });
-
-  it("errores incluyen event_uuid y mencionan chat.message", async () => {
-    const h = new ChatHandler();
-
-    const eventA = chatEvent({ content: "x" }, "aaaa1111aaaa");
-    const errA = await h
-      .handle(fakeContext(fakePublisher()), eventA)
+    const err = await h
+      .handle(fakeContext(publisher, resolver), event)
       .catch((e) => e);
-    expect(errA).toBeInstanceOf(MissingPlayerNameError);
-    expect((errA as MissingPlayerNameError).eventUuid).toBe(eventA.event_uuid);
-    expect((errA as MissingPlayerNameError).message).toContain("chat.message");
 
-    const eventB = chatEvent({ name: "V" }, "bbbb2222bbbb");
-    const errB = await h
-      .handle(fakeContext(fakePublisher()), eventB)
+    expect(err).toBeInstanceOf(MissingPlayerUuidError);
+    expect((err as MissingPlayerUuidError).eventUuid).toBe(event.event_uuid);
+    expect((err as MissingPlayerUuidError).code).toBe("MISSING_PLAYER_UUID");
+    expect((err as MissingPlayerUuidError).message).toContain("chat.message");
+    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(publisher.publish).not.toHaveBeenCalled();
+  });
+
+  it("data.content ausente / no-string / vacio: MissingChatMessageError", async () => {
+    const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "V" });
+    const h = new ChatHandler();
+
+    await expect(
+      h.handle(
+        fakeContext(publisher, resolver),
+        chatEvent({ eventUuid: "00000000-0000-4000-8000-000000000010", data: {} }),
+      ),
+    ).rejects.toBeInstanceOf(MissingChatMessageError);
+    await expect(
+      h.handle(
+        fakeContext(publisher, resolver),
+        chatEvent({ eventUuid: "00000000-0000-4000-8000-000000000011", data: { content: 42 } }),
+      ),
+    ).rejects.toBeInstanceOf(MissingChatMessageError);
+    await expect(
+      h.handle(
+        fakeContext(publisher, resolver),
+        chatEvent({ eventUuid: "00000000-0000-4000-8000-000000000012", data: { content: "" } }),
+      ),
+    ).rejects.toBeInstanceOf(MissingChatMessageError);
+    expect(publisher.publish).not.toHaveBeenCalled();
+  });
+
+  it("resolver lanza PlayerNotFoundError: se propaga, publisher NO se llama", async () => {
+    const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({});
+    const h = new ChatHandler();
+
+    await expect(
+      h.handle(fakeContext(publisher, resolver), chatEvent()),
+    ).rejects.toBeInstanceOf(PlayerNotFoundError);
+    expect(publisher.publish).not.toHaveBeenCalled();
+  });
+
+  it("resolver lanza HttpError: se propaga tal cual", async () => {
+    const publisher = fakePublisher();
+    const httpError = new PlayerLookupHttpError(VANCORBUS, 500, "boom");
+    const resolver = {
+      resolve: vi.fn(async () => {
+        throw httpError;
+      }),
+    } as unknown as PlayerNameResolver;
+    const h = new ChatHandler();
+
+    const err = await h
+      .handle(fakeContext(publisher, resolver), chatEvent())
       .catch((e) => e);
-    expect(errB).toBeInstanceOf(MissingChatMessageError);
-    expect((errB as MissingChatMessageError).eventUuid).toBe(eventB.event_uuid);
-    expect((errB as MissingChatMessageError).message).toContain("chat.message");
+    expect(err).toBe(httpError);
+    expect(publisher.publish).not.toHaveBeenCalled();
   });
 
   it("publisher llamado exactamente una vez en caso feliz", async () => {
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "V" });
     const h = new ChatHandler();
-    await h.handle(fakeContext(publisher), chatEvent({ name: "V", content: "hola" }));
+    await h.handle(fakeContext(publisher, resolver), chatEvent());
     expect(publisher.publish).toHaveBeenCalledTimes(1);
   });
 
@@ -218,9 +267,10 @@ describe("ChatHandler", () => {
         throw boom;
       }),
     };
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "V" });
     const h = new ChatHandler();
     await expect(
-      h.handle(fakeContext(publisher), chatEvent({ name: "V", content: "hola" })),
+      h.handle(fakeContext(publisher, resolver), chatEvent()),
     ).rejects.toBe(boom);
   });
 
@@ -231,10 +281,11 @@ describe("ChatHandler", () => {
         seen.push(p);
       },
     };
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
     const h = new ChatHandler();
     await h.handle(
-      fakeContext(publisher),
-      chatEvent({ name: "Vancorbus", content: "hola mundo minecraft" }),
+      fakeContext(publisher, resolver),
+      chatEvent({ data: { content: "hola mundo minecraft" } }),
     );
     expect(seen).toEqual([
       { title: "Chat", body: "Vancorbus: hola mundo minecraft" },

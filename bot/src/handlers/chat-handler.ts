@@ -1,15 +1,13 @@
 import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
-import { MissingPlayerNameError } from "./errors";
+import { MissingPlayerUuidError } from "./errors";
 
 // ChatHandler: publica cada mensaje de chat del servidor.
 //
-// Dos campos REQUERIDOS del payload (segun docs/event-catalog.md):
-// - `data.name`: nombre del jugador.
-// - `data.content`: contenido del mensaje (el catalogo lo llama
-//   `content`, no `message`; el nombre de la interfaz del handler
-//   sigue siendo "chat message" para claridad semantica).
+// Consume:
+// - player_uuid (raiz, obligatorio) → resolver → nombre canonico.
+// - data.content (obligatorio): contenido del mensaje.
 //
 // Politica de contenido:
 // - NO se filtra el contenido del mensaje.
@@ -45,7 +43,10 @@ export class ChatHandler implements EventHandler {
   }
 
   async handle(context: DispatchContext, event: EventRecord): Promise<void> {
-    const name = extractPlayerName(event);
+    if (event.player_uuid === null) {
+      throw new MissingPlayerUuidError(EVENT_TYPE, event.event_uuid);
+    }
+    const name = await context.playerNameResolver.resolve(event.player_uuid);
     const message = extractChatMessage(event);
 
     await context.publisher.publish({
@@ -53,22 +54,6 @@ export class ChatHandler implements EventHandler {
       body: `${name}: ${message}`,
     });
   }
-}
-
-/**
- * Nombre del jugador. Identificador: trimeamos whitespace antes de
- * validar (misma politica que en los otros handlers). Vacio -> error.
- */
-function extractPlayerName(event: EventRecord): string {
-  const raw = event.data["name"];
-  if (typeof raw !== "string") {
-    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
-  }
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
-  }
-  return trimmed;
 }
 
 /**

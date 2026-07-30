@@ -13,8 +13,16 @@ function fakePublisher(): Publisher & { publish: ReturnType<typeof vi.fn> } {
   return { publish: vi.fn(async () => undefined) };
 }
 
+// Stub del resolver: este handler NO lo consume; si algo lo llamara
+// el test detectaria el bug por el rejected error.
+const NEVER_CALLED_RESOLVER = {
+  resolve: vi.fn(async () => {
+    throw new Error("PlayerNameResolver no debe usarse en server.start");
+  }),
+} as unknown as import("../src/players").PlayerNameResolver;
+
 function fakeContext(publisher: Publisher): DispatchContext {
-  return { publisher };
+  return { publisher, playerNameResolver: NEVER_CALLED_RESOLVER };
 }
 
 function fakeEvent(type: string): EventRecord {

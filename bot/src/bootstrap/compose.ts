@@ -7,6 +7,7 @@ import { EventDispatcher } from "../dispatcher";
 import type { EventHandler } from "../dispatcher";
 import { EventStoreClient } from "../eventstore";
 import { FileCursorStore } from "../cursor";
+import { PlayerNameResolver } from "../players";
 import { PollingEngine } from "../polling";
 import {
   ServerStartedHandler,
@@ -80,6 +81,7 @@ export interface AppServices {
   eventStoreClient: EventStoreClient;
   cursorStore: FileCursorStore;
   pollingEngine: PollingEngine;
+  playerNameResolver: PlayerNameResolver;
 }
 
 /**
@@ -107,8 +109,15 @@ export function composeApp(config: Config): App {
     channelId: config.discord.eventsChannelId,
   });
 
+  // Resolucion de identidad. Se apoya en la misma api que el
+  // EventStoreClient — reusa baseUrl y timeoutMs de config.eventStore.
+  const playerNameResolver = new PlayerNameResolver({
+    baseUrl: config.eventStore.baseUrl,
+    timeoutMs: config.eventStore.timeoutMs,
+  });
+
   // Dispatcher + handlers
-  const context: DispatchContext = { publisher };
+  const context: DispatchContext = { publisher, playerNameResolver };
   const dispatcher = new EventDispatcher({ context });
   for (const { eventType, handler } of createHandlerRegistrations()) {
     dispatcher.register(eventType, handler);
@@ -136,6 +145,7 @@ export function composeApp(config: Config): App {
     eventStoreClient,
     cursorStore,
     pollingEngine,
+    playerNameResolver,
   };
 
   return {

@@ -1,4 +1,5 @@
 import type { Publisher } from "../publisher";
+import type { PlayerNameResolver } from "../players";
 
 // Contexto compartido que el dispatcher entrega a cada handler.
 //
@@ -11,12 +12,15 @@ import type { Publisher } from "../publisher";
 //   ocurra, tratarlo como cambio arquitectonico y documentar via
 //   ADR + commit propio.
 //
-// v1: solo `publisher`. Sin logger, sin metricas, sin clock, sin
-// config, sin nada mas. Cuando aparezcan casos reales que justifiquen
-// nuevos campos (metricas para observabilidad, clock inyectable para
-// tests deterministas de tiempo, etc.) se anaden aqui con racional
-// en el commit correspondiente.
+// v1.1:
+// - `publisher`: sink de mensajes (Discord u otro).
+// - `playerNameResolver`: unica via de resolucion UUID → nombre.
+//   Anadido para desbloquear los 5 handlers de player (Etapa 4 del
+//   plan P0-2). Los handlers de server / tps / backup no lo consumen
+//   pero lo reciben igual: es responsabilidad del handler acceder solo
+//   a los campos que necesita.
 
 export interface DispatchContext {
   publisher: Publisher;
+  playerNameResolver: PlayerNameResolver;
 }

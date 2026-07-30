@@ -1,16 +1,15 @@
 import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
-import { MissingPlayerNameError } from "./errors";
+import { MissingPlayerUuidError } from "./errors";
 
 // PlayerLeftHandler: publica cuando un jugador sale del servidor.
 //
-// Gemelo de PlayerJoinedHandler: consume `event.data.name`, valida,
-// construye mensaje. Si el payload no cumple lo minimo, lanza
-// MissingPlayerNameError (compartido en ./errors) y NO publica.
+// Gemelo de PlayerJoinedHandler. Resuelve el nombre via
+// context.playerNameResolver. Si el evento llega sin player_uuid,
+// MissingPlayerUuidError; si el resolver falla, se propaga el error
+// tipado.
 
-// Tipo del catalogo oficial. Conceptualmente "el jugador se desconecto";
-// el catalogo lo llama session.end.
 const EVENT_TYPE = "session.end";
 
 const TITLE = "Jugador desconectado";
@@ -21,26 +20,13 @@ export class PlayerLeftHandler implements EventHandler {
   }
 
   async handle(context: DispatchContext, event: EventRecord): Promise<void> {
-    const name = extractPlayerName(event);
+    if (event.player_uuid === null) {
+      throw new MissingPlayerUuidError(EVENT_TYPE, event.event_uuid);
+    }
+    const name = await context.playerNameResolver.resolve(event.player_uuid);
     await context.publisher.publish({
       title: TITLE,
       body: `${name} ha salido del servidor.`,
     });
   }
-}
-
-/**
- * Extrae el nombre del jugador desde `event.data.name`. Lanza
- * MissingPlayerNameError si falta, no es string, o es vacio/whitespace.
- */
-function extractPlayerName(event: EventRecord): string {
-  const raw = event.data["name"];
-  if (typeof raw !== "string") {
-    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
-  }
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    throw new MissingPlayerNameError(EVENT_TYPE, event.event_uuid);
-  }
-  return trimmed;
 }

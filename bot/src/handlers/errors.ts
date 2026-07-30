@@ -10,23 +10,25 @@
 // construccion.
 
 /**
- * Lanzada cuando el payload de un evento player.* no contiene un
- * campo `data.name` valido (falta, no es string, o esta vacio/
- * whitespace). Compartido entre PlayerJoined, PlayerLeft, PlayerDeath,
- * Advancement y Chat.
+ * Lanzada cuando un evento player.* llega sin `player_uuid` a nivel
+ * raiz (el catalogo lo declara requerido pero el schema del api lo
+ * permite nullable). Compartido entre PlayerJoined, PlayerLeft,
+ * PlayerDeath, Advancement y Chat.
  *
  * `eventType` se pasa en construccion para que el mensaje mencione el
  * tipo concreto que fallo — util al depurar sin necesidad de
  * inspeccionar `.cause` o traces.
  */
-export class MissingPlayerNameError extends Error {
-  readonly code = "MISSING_PLAYER_NAME";
+export class MissingPlayerUuidError extends Error {
+  readonly code = "MISSING_PLAYER_UUID";
 
   constructor(
     public readonly eventType: string,
     public readonly eventUuid: string,
   ) {
-    super(`${eventType} sin campo data.name valido (event_uuid=${eventUuid})`);
-    this.name = "MissingPlayerNameError";
+    super(
+      `${eventType} sin player_uuid a nivel raiz (event_uuid=${eventUuid})`,
+    );
+    this.name = "MissingPlayerUuidError";
   }
 }

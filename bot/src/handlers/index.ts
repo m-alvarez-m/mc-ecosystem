@@ -1,6 +1,6 @@
 // Barrel export del modulo handlers.
 
-export { MissingPlayerNameError } from "./errors";
+export { MissingPlayerUuidError } from "./errors";
 
 export { ServerStartedHandler } from "./server-started-handler";
 export { ServerStoppedHandler } from "./server-stopped-handler";

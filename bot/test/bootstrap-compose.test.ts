@@ -9,6 +9,7 @@ import { EventDispatcher } from "../src/dispatcher";
 import { EventStoreClient } from "../src/eventstore";
 import { FileCursorStore } from "../src/cursor";
 import { PollingEngine } from "../src/polling";
+import { PlayerNameResolver } from "../src/players";
 import {
   ServerStartedHandler,
   ServerStoppedHandler,
@@ -128,6 +129,7 @@ describe("composeApp", () => {
     expect(app.services.eventStoreClient).toBeInstanceOf(EventStoreClient);
     expect(app.services.cursorStore).toBeInstanceOf(FileCursorStore);
     expect(app.services.pollingEngine).toBeInstanceOf(PollingEngine);
+    expect(app.services.playerNameResolver).toBeInstanceOf(PlayerNameResolver);
   });
 
   it("expone start() y stop() como unico punto de entrada operacional", () => {
@@ -153,6 +155,9 @@ describe("composeApp", () => {
     const seenUnknown: string[] = [];
     const context = {
       publisher: { publish: async () => undefined },
+      playerNameResolver: {
+        resolve: async () => "TestName",
+      } as unknown as PlayerNameResolver,
     };
     const dispatcher = new EventDispatcher({
       context,
@@ -193,6 +198,9 @@ describe("composeApp", () => {
     const seenUnknown: string[] = [];
     const context = {
       publisher: { publish: async () => undefined },
+      playerNameResolver: {
+        resolve: async () => "TestName",
+      } as unknown as PlayerNameResolver,
     };
     const dispatcher = new EventDispatcher({
       context,

@@ -3,39 +3,61 @@ import {
   AdvancementHandler,
   MissingAdvancementNameError,
 } from "../src/handlers/advancement-handler";
-import { MissingPlayerNameError } from "../src/handlers/errors";
+import { MissingPlayerUuidError } from "../src/handlers/errors";
 import type { DispatchContext } from "../src/context";
 import type { Publisher, PublishPayload } from "../src/publisher";
 import type { EventRecord } from "../src/eventstore";
-
-// Tests de AdvancementHandler.
-// Sin Discord, sin red: publisher fake y contexto minimo.
+import {
+  PlayerNameResolver,
+  PlayerNotFoundError,
+  PlayerLookupHttpError,
+} from "../src/players";
 
 function fakePublisher(): Publisher & { publish: ReturnType<typeof vi.fn> } {
   return { publish: vi.fn(async () => undefined) };
 }
 
-function fakeContext(publisher: Publisher): DispatchContext {
-  return { publisher };
+function fakeResolverFromMap(
+  map: Record<string, string>,
+): PlayerNameResolver & { resolve: ReturnType<typeof vi.fn> } {
+  const resolve = vi.fn(async (uuid: string) => {
+    if (uuid in map) return map[uuid]!;
+    throw new PlayerNotFoundError(uuid);
+  });
+  return { resolve } as unknown as PlayerNameResolver & {
+    resolve: ReturnType<typeof vi.fn>;
+  };
 }
 
+function fakeContext(
+  publisher: Publisher,
+  resolver: PlayerNameResolver,
+): DispatchContext {
+  return { publisher, playerNameResolver: resolver };
+}
+
+const VANCORBUS = "71804e99-f2aa-32dc-bfcb-0ea5cfdda708";
+
 function advancementEvent(
-  data: Record<string, unknown>,
-  uuid = "aaaa",
+  overrides: {
+    playerUuid?: string | null;
+    eventUuid?: string;
+    data?: Record<string, unknown>;
+  } = {},
 ): EventRecord {
   return {
     id: "42",
-    event_uuid: `00000000-0000-4000-8000-${uuid.padStart(12, "0")}`,
+    event_uuid: overrides.eventUuid ?? "00000000-0000-4000-8000-000000000001",
     type: "advancement.done",
     v: 1,
     ts: "2026-07-27T00:00:00.000Z",
     received_at: "2026-07-27T00:00:00.010Z",
-    player_uuid: "71804e99-f2aa-32dc-bfcb-0ea5cfdda708",
+    player_uuid: overrides.playerUuid === undefined ? VANCORBUS : overrides.playerUuid,
     world: "world",
     x: 0,
     y: 64,
     z: 0,
-    data,
+    data: overrides.data ?? { advancement: "Enter the Nether" },
   };
 }
 
@@ -49,30 +71,43 @@ describe("AdvancementHandler", () => {
     expect(h.supports("ADVANCEMENT.DONE")).toBe(false);
   });
 
-  it("publicacion correcta con jugador y avance", async () => {
+  it("caso feliz: resolver + advancement → body interpolado", async () => {
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
     const h = new AdvancementHandler();
+
     await h.handle(
-      fakeContext(publisher),
-      advancementEvent({ name: "Vancorbus", advancement: "Enter the Nether" }),
+      fakeContext(publisher, resolver),
+      advancementEvent({ data: { advancement: "Enter the Nether" } }),
     );
 
+    expect(resolver.resolve).toHaveBeenCalledWith(VANCORBUS);
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Nuevo avance",
       body: "Vancorbus ha conseguido el avance: Enter the Nether.",
     });
   });
 
-  it("mensaje esperado para varios jugadores/avances", async () => {
+  it("distintos player_uuid resuelven a distintos nombres", async () => {
+    const other = "8a80a72d-fb01-3e17-9a96-2b801d16f82d";
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({
+      [VANCORBUS]: "Pacman26",
+      [other]: "Elrid",
+    });
     const h = new AdvancementHandler();
+
     await h.handle(
-      fakeContext(publisher),
-      advancementEvent({ name: "Pacman26", advancement: "Diamonds!" }),
+      fakeContext(publisher, resolver),
+      advancementEvent({ data: { advancement: "Diamonds!" } }),
     );
     await h.handle(
-      fakeContext(publisher),
-      advancementEvent({ name: "Elrid", advancement: "The End?" }),
+      fakeContext(publisher, resolver),
+      advancementEvent({
+        playerUuid: other,
+        eventUuid: "00000000-0000-4000-8000-000000000002",
+        data: { advancement: "The End?" },
+      }),
     );
 
     expect(publisher.publish.mock.calls[0]![0]).toEqual({
@@ -85,12 +120,13 @@ describe("AdvancementHandler", () => {
     });
   });
 
-  it("trimea whitespace de nombre y avance", async () => {
+  it("trimea whitespace del advancement (el nombre viene del resolver)", async () => {
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "V" });
     const h = new AdvancementHandler();
     await h.handle(
-      fakeContext(publisher),
-      advancementEvent({ name: "  V  ", advancement: "  Getting an Upgrade  " }),
+      fakeContext(publisher, resolver),
+      advancementEvent({ data: { advancement: "  Getting an Upgrade  " } }),
     );
 
     expect(publisher.publish).toHaveBeenCalledWith({
@@ -99,97 +135,89 @@ describe("AdvancementHandler", () => {
     });
   });
 
-  it("data.name ausente: MissingPlayerNameError y NO publica", async () => {
+  it("player_uuid null: MissingPlayerUuidError, resolver NO se llama, publisher NO se llama", async () => {
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({});
     const h = new AdvancementHandler();
+    const event = advancementEvent({ playerUuid: null, eventUuid: "00000000-0000-4000-8000-cafecafecafe" });
 
-    await expect(
-      h.handle(fakeContext(publisher), advancementEvent({ advancement: "X" })),
-    ).rejects.toBeInstanceOf(MissingPlayerNameError);
-    expect(publisher.publish).not.toHaveBeenCalled();
-  });
-
-  it("data.name no-string o vacio: MissingPlayerNameError", async () => {
-    const publisher = fakePublisher();
-    const h = new AdvancementHandler();
-
-    await expect(
-      h.handle(
-        fakeContext(publisher),
-        advancementEvent({ name: 42, advancement: "X" }),
-      ),
-    ).rejects.toBeInstanceOf(MissingPlayerNameError);
-    await expect(
-      h.handle(
-        fakeContext(publisher),
-        advancementEvent({ name: "  ", advancement: "X" }),
-      ),
-    ).rejects.toBeInstanceOf(MissingPlayerNameError);
-    expect(publisher.publish).not.toHaveBeenCalled();
-  });
-
-  it("data.advancement ausente: MissingAdvancementNameError y NO publica", async () => {
-    const publisher = fakePublisher();
-    const h = new AdvancementHandler();
-
-    await expect(
-      h.handle(fakeContext(publisher), advancementEvent({ name: "X" })),
-    ).rejects.toBeInstanceOf(MissingAdvancementNameError);
-    expect(publisher.publish).not.toHaveBeenCalled();
-  });
-
-  it("data.advancement no-string o vacio: MissingAdvancementNameError", async () => {
-    const publisher = fakePublisher();
-    const h = new AdvancementHandler();
-
-    await expect(
-      h.handle(
-        fakeContext(publisher),
-        advancementEvent({ name: "X", advancement: 42 }),
-      ),
-    ).rejects.toBeInstanceOf(MissingAdvancementNameError);
-    await expect(
-      h.handle(
-        fakeContext(publisher),
-        advancementEvent({ name: "X", advancement: "" }),
-      ),
-    ).rejects.toBeInstanceOf(MissingAdvancementNameError);
-    await expect(
-      h.handle(
-        fakeContext(publisher),
-        advancementEvent({ name: "X", advancement: "   " }),
-      ),
-    ).rejects.toBeInstanceOf(MissingAdvancementNameError);
-    expect(publisher.publish).not.toHaveBeenCalled();
-  });
-
-  it("errores incluyen event_uuid y mencionan advancement.done", async () => {
-    const h = new AdvancementHandler();
-
-    const eventA = advancementEvent({ advancement: "X" }, "aaaa1111aaaa");
-    const errA = await h
-      .handle(fakeContext(fakePublisher()), eventA)
+    const err = await h
+      .handle(fakeContext(publisher, resolver), event)
       .catch((e) => e);
-    expect(errA).toBeInstanceOf(MissingPlayerNameError);
-    expect((errA as MissingPlayerNameError).eventUuid).toBe(eventA.event_uuid);
-    expect((errA as MissingPlayerNameError).message).toContain("advancement.done");
 
-    const eventB = advancementEvent({ name: "V" }, "bbbb2222bbbb");
-    const errB = await h
-      .handle(fakeContext(fakePublisher()), eventB)
+    expect(err).toBeInstanceOf(MissingPlayerUuidError);
+    expect((err as MissingPlayerUuidError).eventUuid).toBe(event.event_uuid);
+    expect((err as MissingPlayerUuidError).code).toBe("MISSING_PLAYER_UUID");
+    expect((err as MissingPlayerUuidError).message).toContain("advancement.done");
+    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(publisher.publish).not.toHaveBeenCalled();
+  });
+
+  it("data.advancement ausente / no-string / vacio: MissingAdvancementNameError", async () => {
+    const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "V" });
+    const h = new AdvancementHandler();
+
+    await expect(
+      h.handle(
+        fakeContext(publisher, resolver),
+        advancementEvent({ eventUuid: "00000000-0000-4000-8000-000000000010", data: {} }),
+      ),
+    ).rejects.toBeInstanceOf(MissingAdvancementNameError);
+    await expect(
+      h.handle(
+        fakeContext(publisher, resolver),
+        advancementEvent({ eventUuid: "00000000-0000-4000-8000-000000000011", data: { advancement: 42 } }),
+      ),
+    ).rejects.toBeInstanceOf(MissingAdvancementNameError);
+    await expect(
+      h.handle(
+        fakeContext(publisher, resolver),
+        advancementEvent({ eventUuid: "00000000-0000-4000-8000-000000000012", data: { advancement: "" } }),
+      ),
+    ).rejects.toBeInstanceOf(MissingAdvancementNameError);
+    await expect(
+      h.handle(
+        fakeContext(publisher, resolver),
+        advancementEvent({ eventUuid: "00000000-0000-4000-8000-000000000013", data: { advancement: "   " } }),
+      ),
+    ).rejects.toBeInstanceOf(MissingAdvancementNameError);
+    expect(publisher.publish).not.toHaveBeenCalled();
+  });
+
+  it("resolver lanza PlayerNotFoundError: se propaga, publisher NO se llama", async () => {
+    const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({});
+    const h = new AdvancementHandler();
+
+    await expect(
+      h.handle(fakeContext(publisher, resolver), advancementEvent()),
+    ).rejects.toBeInstanceOf(PlayerNotFoundError);
+    expect(publisher.publish).not.toHaveBeenCalled();
+  });
+
+  it("resolver lanza HttpError: se propaga tal cual", async () => {
+    const publisher = fakePublisher();
+    const httpError = new PlayerLookupHttpError(VANCORBUS, 500, "boom");
+    const resolver = {
+      resolve: vi.fn(async () => {
+        throw httpError;
+      }),
+    } as unknown as PlayerNameResolver;
+    const h = new AdvancementHandler();
+
+    const err = await h
+      .handle(fakeContext(publisher, resolver), advancementEvent())
       .catch((e) => e);
-    expect(errB).toBeInstanceOf(MissingAdvancementNameError);
-    expect((errB as MissingAdvancementNameError).eventUuid).toBe(eventB.event_uuid);
-    expect((errB as MissingAdvancementNameError).message).toContain("advancement.done");
+    expect(err).toBe(httpError);
+    expect(publisher.publish).not.toHaveBeenCalled();
   });
 
   it("publisher llamado exactamente una vez en caso feliz", async () => {
     const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "X" });
     const h = new AdvancementHandler();
-    await h.handle(
-      fakeContext(publisher),
-      advancementEvent({ name: "X", advancement: "Y" }),
-    );
+    await h.handle(fakeContext(publisher, resolver), advancementEvent());
     expect(publisher.publish).toHaveBeenCalledTimes(1);
   });
 
@@ -200,12 +228,10 @@ describe("AdvancementHandler", () => {
         throw boom;
       }),
     };
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "X" });
     const h = new AdvancementHandler();
     await expect(
-      h.handle(
-        fakeContext(publisher),
-        advancementEvent({ name: "X", advancement: "Y" }),
-      ),
+      h.handle(fakeContext(publisher, resolver), advancementEvent()),
     ).rejects.toBe(boom);
   });
 
@@ -216,10 +242,11 @@ describe("AdvancementHandler", () => {
         seen.push(p);
       },
     };
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
     const h = new AdvancementHandler();
     await h.handle(
-      fakeContext(publisher),
-      advancementEvent({ name: "Vancorbus", advancement: "Enter the Nether" }),
+      fakeContext(publisher, resolver),
+      advancementEvent({ data: { advancement: "Enter the Nether" } }),
     );
     expect(seen).toEqual([
       {

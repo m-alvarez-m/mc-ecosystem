@@ -11,8 +11,14 @@ function fakePublisher(): Publisher & { publish: ReturnType<typeof vi.fn> } {
   return { publish: vi.fn(async () => undefined) };
 }
 
+const NEVER_CALLED_RESOLVER = {
+  resolve: vi.fn(async () => {
+    throw new Error("PlayerNameResolver no debe usarse en server.tps_sample");
+  }),
+} as unknown as import("../src/players").PlayerNameResolver;
+
 function fakeContext(publisher: Publisher): DispatchContext {
-  return { publisher };
+  return { publisher, playerNameResolver: NEVER_CALLED_RESOLVER };
 }
 
 function tpsEvent(data: Record<string, unknown>, uuid = "aaaa"): EventRecord {
