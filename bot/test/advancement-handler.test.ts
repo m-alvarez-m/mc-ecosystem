@@ -71,20 +71,55 @@ describe("AdvancementHandler", () => {
     expect(h.supports("ADVANCEMENT.DONE")).toBe(false);
   });
 
-  it("caso feliz: resolver + advancement → body interpolado", async () => {
+  it("caso feliz: advancement conocido en catálogo → publica el título traducido", async () => {
     const publisher = fakePublisher();
     const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
     const h = new AdvancementHandler();
 
     await h.handle(
       fakeContext(publisher, resolver),
-      advancementEvent({ data: { advancement: "Enter the Nether" } }),
+      advancementEvent({ data: { advancement: "minecraft:story/mine_stone" } }),
     );
 
     expect(resolver.resolve).toHaveBeenCalledWith(VANCORBUS);
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Nuevo avance",
-      body: "Vancorbus ha conseguido el avance: Enter the Nether.",
+      body: "Vancorbus ha conseguido el avance: Edad de Piedra.",
+    });
+  });
+
+  it("advancement conocido: publica el título oficial en español", async () => {
+    const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
+    const h = new AdvancementHandler();
+
+    await h.handle(
+      fakeContext(publisher, resolver),
+      advancementEvent({ data: { advancement: "minecraft:story/enter_the_end" } }),
+    );
+
+    expect(publisher.publish).toHaveBeenCalledWith({
+      title: "Nuevo avance",
+      body: "Vancorbus ha conseguido el avance: El End... ¿Otra vez?.",
+    });
+  });
+
+  it("advancement desconocido: fallback al ID crudo (sin lanzar)", async () => {
+    const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
+    const h = new AdvancementHandler();
+
+    // ID de un datapack custom / mod / advancement no vanilla:
+    // el handler debe publicar sin traducir, no lanzar excepción.
+    await h.handle(
+      fakeContext(publisher, resolver),
+      advancementEvent({ data: { advancement: "customdatapack:tourney/win_gold" } }),
+    );
+
+    expect(publisher.publish).toHaveBeenCalledWith({
+      title: "Nuevo avance",
+      body:
+        "Vancorbus ha conseguido el avance: customdatapack:tourney/win_gold.",
     });
   });
 
@@ -99,24 +134,24 @@ describe("AdvancementHandler", () => {
 
     await h.handle(
       fakeContext(publisher, resolver),
-      advancementEvent({ data: { advancement: "Diamonds!" } }),
+      advancementEvent({ data: { advancement: "minecraft:story/mine_diamond" } }),
     );
     await h.handle(
       fakeContext(publisher, resolver),
       advancementEvent({
         playerUuid: other,
         eventUuid: "00000000-0000-4000-8000-000000000002",
-        data: { advancement: "The End?" },
+        data: { advancement: "minecraft:end/kill_dragon" },
       }),
     );
 
     expect(publisher.publish.mock.calls[0]![0]).toEqual({
       title: "Nuevo avance",
-      body: "Pacman26 ha conseguido el avance: Diamonds!.",
+      body: "Pacman26 ha conseguido el avance: ¡Diamantes!.",
     });
     expect(publisher.publish.mock.calls[1]![0]).toEqual({
       title: "Nuevo avance",
-      body: "Elrid ha conseguido el avance: The End?.",
+      body: "Elrid ha conseguido el avance: Libera al End.",
     });
   });
 
@@ -129,6 +164,9 @@ describe("AdvancementHandler", () => {
       advancementEvent({ data: { advancement: "  Getting an Upgrade  " } }),
     );
 
+    // Fallback: el catálogo no conoce "Getting an Upgrade" (nombre EN),
+    // así que publica el ID trimeado tal cual — sin cambiar el resto
+    // del mensaje.
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Nuevo avance",
       body: "V ha conseguido el avance: Getting an Upgrade.",

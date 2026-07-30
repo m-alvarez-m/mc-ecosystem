@@ -1,6 +1,7 @@
 import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
+import { ADVANCEMENT_CATALOG } from "../minecraft";
 import { MissingPlayerUuidError } from "./errors";
 
 // AdvancementHandler: publica cuando un jugador consigue un avance.
@@ -42,7 +43,12 @@ export class AdvancementHandler implements EventHandler {
       throw new MissingPlayerUuidError(EVENT_TYPE, event.event_uuid);
     }
     const name = await context.playerNameResolver.resolve(event.player_uuid);
-    const advancement = extractAdvancementName(event);
+    const advancementId = extractAdvancementName(event);
+    // Traducción opcional: si el ID está en el catálogo canónico, se
+    // muestra su título oficial en español. Si no, fallback al ID
+    // crudo (nunca se lanza aquí — mostrar el ID feo es preferible a
+    // atascar el cursor por un advancement que no conocemos aún).
+    const advancement = ADVANCEMENT_CATALOG.get(advancementId)?.title ?? advancementId;
 
     await context.publisher.publish({
       title: TITLE,
