@@ -72,6 +72,7 @@ public final class SessionListener implements Listener {
         tracker.touch(uuid);
 
         JsonObject data = new JsonObject();
+        data.addProperty("name", player.getName());
         String ipHash = hashAddress(player.getAddress());
         if (ipHash != null) {
             data.addProperty("ip_hash", ipHash);

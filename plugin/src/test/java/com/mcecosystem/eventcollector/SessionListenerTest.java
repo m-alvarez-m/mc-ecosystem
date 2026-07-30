@@ -37,6 +37,60 @@ class SessionListenerTest {
     }
 
     @Test
+    void sessionStartIncludesPlayerNameInData() {
+        PlayerMock player = server.addPlayer("Vancorbus");
+
+        JsonObject start = output.single("session.start");
+        JsonObject data = start.getAsJsonObject("data");
+        assertEquals("Vancorbus", data.get("name").getAsString(),
+                "session.start.data.name debe reflejar player.getName() para poblar players");
+        assertEquals(player.getUniqueId().toString(),
+                start.get("player_uuid").getAsString(),
+                "player_uuid a nivel raíz sigue siendo la identidad canónica del evento");
+    }
+
+    @Test
+    void sessionStartRawJsonMatchesApiContract() throws java.io.IOException {
+        // Verificación empírica: el JSON crudo que el plugin serializaría
+        // por HTTP debe pasar la validación AJV del api sin modificaciones.
+        // Este test extrae los bytes exactos y los deja en build/ para
+        // que un curl externo los envíe al api sin re-serializar en medio.
+        server.addPlayer("Vancorbus");
+
+        String rawJson = output.rawBodies.stream()
+                .filter(s -> s.contains("\"type\":\"session.start\""))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no se capturó session.start"));
+
+        // Validación de shape en el propio plugin, contra el schema del api:
+        //   required: event_uuid, type, v, ts
+        //   opcionales tipados: player_uuid (uuid), data (object)
+        //   additionalProperties: false → todo campo debe estar en la lista
+        JsonObject json = com.google.gson.JsonParser.parseString(rawJson).getAsJsonObject();
+        java.util.UUID.fromString(json.get("event_uuid").getAsString()); // format:"uuid"
+        assertEquals("session.start", json.get("type").getAsString());
+        assertEquals(1, json.get("v").getAsInt());                        // integer >= 1
+        java.time.Instant.parse(json.get("ts").getAsString());            // format:"date-time"
+        java.util.UUID.fromString(json.get("player_uuid").getAsString()); // format:"uuid"
+        JsonObject data = json.getAsJsonObject("data");
+        assertEquals("Vancorbus", data.get("name").getAsString());
+
+        // Ningún campo prohibido por additionalProperties:false del api.
+        java.util.Set<String> allowedTopLevel = java.util.Set.of(
+                "event_uuid", "type", "v", "ts",
+                "player_uuid", "world", "x", "y", "z", "data");
+        for (String key : json.keySet()) {
+            assertTrue(allowedTopLevel.contains(key),
+                    "campo top-level '" + key + "' no está permitido por el schema del api");
+        }
+
+        // Volcado del JSON crudo para verificación end-to-end con curl.
+        java.nio.file.Path out = java.nio.file.Path.of("build", "plugin-emitted-session-start.json");
+        java.nio.file.Files.createDirectories(out.getParent());
+        java.nio.file.Files.writeString(out, rawJson);
+    }
+
+    @Test
     void flushForShutdownClosesOpenSessionsDurablyWithAfkFirst() throws InterruptedException {
         PlayerMock afkPlayer = server.addPlayer("Afk");
         PlayerMock quitter = server.addPlayer("Quitter");

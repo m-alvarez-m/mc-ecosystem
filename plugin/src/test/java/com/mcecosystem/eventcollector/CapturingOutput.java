@@ -14,14 +14,18 @@ final class CapturingOutput implements EventOutput {
     final List<JsonObject> events = new ArrayList<>();
     /** Subconjunto de events que entró por storeDurable (camino de apagado). */
     final List<JsonObject> durable = new ArrayList<>();
+    /** JSON crudos tal cual salen del plugin (mismos bytes que iría por HTTP). */
+    final List<String> rawBodies = new ArrayList<>();
 
     @Override
     public void send(String eventUuid, String jsonBody) {
+        rawBodies.add(jsonBody);
         events.add(JsonParser.parseString(jsonBody).getAsJsonObject());
     }
 
     @Override
     public void storeDurable(String eventUuid, String jsonBody) {
+        rawBodies.add(jsonBody);
         JsonObject json = JsonParser.parseString(jsonBody).getAsJsonObject();
         events.add(json);
         durable.add(json);
