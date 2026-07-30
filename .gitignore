@@ -12,3 +12,6 @@ backup-repo-prod/
 # Artefacto generado por infra/resourcepack/build-pack.ps1 (el .ogg sí se versiona).
 pack.zip
 .gradle/
+# Estado runtime del bot (cursor persistente del PollingEngine, ADR-010).
+# Se regenera en cada arranque; distinto por instancia; jamás se commite.
+bot/data/
