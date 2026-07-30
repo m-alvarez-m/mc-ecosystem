@@ -82,6 +82,7 @@ describe("TpsHandler", () => {
     expect(publisher.publish).toHaveBeenCalledOnce();
     const call = publisher.publish.mock.calls[0]![0] as PublishPayload;
     expect(call.title).toBe("Rendimiento degradado");
+    expect(call.kind).toBe("tps_degraded");
     // El body debe reflejar el TPS medido Y el umbral configurado.
     expect(call.body).toContain("15");
     expect(call.body).toContain("18");

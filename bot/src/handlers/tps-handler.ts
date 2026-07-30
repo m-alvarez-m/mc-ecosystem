@@ -65,6 +65,7 @@ export class TpsHandler implements EventHandler {
     await context.publisher.publish({
       title: ALERT_TITLE,
       body: `El servidor está lento: TPS ${String(tps)} (umbral ${String(this.alertThreshold)}).`,
+      kind: "tps_degraded",
     });
   }
 }

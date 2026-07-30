@@ -85,6 +85,7 @@ describe("AdvancementHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Nuevo avance",
       body: "Vancorbus ha conseguido el avance: Edad de Piedra.",
+      kind: "advancement",
     });
   });
 
@@ -101,6 +102,7 @@ describe("AdvancementHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Nuevo avance",
       body: "Vancorbus ha conseguido el avance: El End... ¿Otra vez?.",
+      kind: "advancement",
     });
   });
 
@@ -120,6 +122,7 @@ describe("AdvancementHandler", () => {
       title: "Nuevo avance",
       body:
         "Vancorbus ha conseguido el avance: customdatapack:tourney/win_gold.",
+      kind: "advancement",
     });
   });
 
@@ -148,10 +151,12 @@ describe("AdvancementHandler", () => {
     expect(publisher.publish.mock.calls[0]![0]).toEqual({
       title: "Nuevo avance",
       body: "Pacman26 ha conseguido el avance: ¡Diamantes!.",
+      kind: "advancement",
     });
     expect(publisher.publish.mock.calls[1]![0]).toEqual({
       title: "Nuevo avance",
       body: "Elrid ha conseguido el avance: Libera al End.",
+      kind: "advancement",
     });
   });
 
@@ -170,6 +175,7 @@ describe("AdvancementHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Nuevo avance",
       body: "V ha conseguido el avance: Getting an Upgrade.",
+      kind: "advancement",
     });
   });
 
@@ -290,6 +296,7 @@ describe("AdvancementHandler", () => {
       {
         title: "Nuevo avance",
         body: "Vancorbus ha conseguido el avance: Enter the Nether.",
+      kind: "advancement",
       },
     ]);
   });

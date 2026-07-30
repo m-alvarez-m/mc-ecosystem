@@ -166,8 +166,8 @@ describe("PlayerNameResolver.resolve", () => {
     await new PlayerJoinedHandler().handle(context, joinEvent);
 
     expect(seen).toEqual([
-      { title: "Chat", body: "Vancorbus: hola" },
-      { title: "Jugador conectado", body: "Vancorbus se ha unido al servidor." },
+      { title: "Chat", body: "Vancorbus: hola", kind: "chat" },
+      { title: "Jugador conectado", body: "Vancorbus se ha unido al servidor.", kind: "player_joined" },
     ]);
     // Punto clave: el segundo handler NO dispara HTTP adicional.
     expect(spy).toHaveBeenCalledTimes(1);

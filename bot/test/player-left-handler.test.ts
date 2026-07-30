@@ -75,6 +75,7 @@ describe("PlayerLeftHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Jugador desconectado",
       body: "Vancorbus ha salido del servidor.",
+      kind: "player_left",
     });
   });
 
@@ -96,10 +97,12 @@ describe("PlayerLeftHandler", () => {
     expect(publisher.publish.mock.calls[0]![0]).toEqual({
       title: "Jugador desconectado",
       body: "Vancorbus ha salido del servidor.",
+      kind: "player_left",
     });
     expect(publisher.publish.mock.calls[1]![0]).toEqual({
       title: "Jugador desconectado",
       body: "Elrid ha salido del servidor.",
+      kind: "player_left",
     });
   });
 
@@ -182,7 +185,7 @@ describe("PlayerLeftHandler", () => {
     const h = new PlayerLeftHandler();
     await h.handle(fakeContext(publisher, resolver), playerLeaveEvent());
     expect(seen).toEqual([
-      { title: "Jugador desconectado", body: "Vancorbus ha salido del servidor." },
+      { title: "Jugador desconectado", body: "Vancorbus ha salido del servidor.", kind: "player_left" },
     ]);
   });
 });

@@ -49,6 +49,7 @@ export class BackupHandler implements EventHandler {
     await context.publisher.publish({
       title: TITLE,
       body: `Tipo: ${kind}. Tamaño: ${String(sizeMb)} MB. Estado: ${estado}.`,
+      kind: "backup",
     });
   }
 }

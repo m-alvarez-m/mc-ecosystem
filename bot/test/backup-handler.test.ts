@@ -65,6 +65,7 @@ describe("BackupHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Respaldo completado",
       body: "Tipo: world. Tamaño: 220 MB. Estado: exitoso.",
+      kind: "backup",
     });
   });
 
@@ -79,6 +80,7 @@ describe("BackupHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Respaldo completado",
       body: "Tipo: db. Tamaño: 5 MB. Estado: fallido.",
+      kind: "backup",
     });
   });
 
@@ -93,6 +95,7 @@ describe("BackupHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Respaldo completado",
       body: "Tipo: world. Tamaño: 100 MB. Estado: exitoso.",
+      kind: "backup",
     });
   });
 
@@ -107,6 +110,7 @@ describe("BackupHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Respaldo completado",
       body: "Tipo: db. Tamaño: 0 MB. Estado: exitoso.",
+      kind: "backup",
     });
   });
 
@@ -266,6 +270,7 @@ describe("BackupHandler", () => {
       {
         title: "Respaldo completado",
         body: "Tipo: world. Tamaño: 223 MB. Estado: exitoso.",
+      kind: "backup",
       },
     ]);
   });

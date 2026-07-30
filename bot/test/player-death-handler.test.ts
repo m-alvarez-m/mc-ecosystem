@@ -80,6 +80,7 @@ describe("PlayerDeathHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Jugador eliminado",
       body: "Vancorbus ha muerto por un Creeper.",
+      kind: "player_death",
     });
   });
 
@@ -93,6 +94,7 @@ describe("PlayerDeathHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Jugador eliminado",
       body: "Vancorbus ha muerto.",
+      kind: "player_death",
     });
   });
 
@@ -117,14 +119,17 @@ describe("PlayerDeathHandler", () => {
     expect(publisher.publish.mock.calls[0]![0]).toEqual({
       title: "Jugador eliminado",
       body: "X ha muerto.",
+      kind: "player_death",
     });
     expect(publisher.publish.mock.calls[1]![0]).toEqual({
       title: "Jugador eliminado",
       body: "X ha muerto.",
+      kind: "player_death",
     });
     expect(publisher.publish.mock.calls[2]![0]).toEqual({
       title: "Jugador eliminado",
       body: "X ha muerto.",
+      kind: "player_death",
     });
   });
 
@@ -140,6 +145,7 @@ describe("PlayerDeathHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Jugador eliminado",
       body: "Vancorbus ha muerto por caida al vacio.",
+      kind: "player_death",
     });
   });
 
@@ -225,7 +231,7 @@ describe("PlayerDeathHandler", () => {
       playerDeathEvent({ data: { cause: "un esqueleto" } }),
     );
     expect(seen).toEqual([
-      { title: "Jugador eliminado", body: "Vancorbus ha muerto por un esqueleto." },
+      { title: "Jugador eliminado", body: "Vancorbus ha muerto por un esqueleto.", kind: "player_death" },
     ]);
   });
 });

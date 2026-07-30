@@ -30,6 +30,7 @@ export class ServerStoppedHandler implements EventHandler {
     await context.publisher.publish({
       title: TITLE,
       body: BODY,
+      kind: "server_stopped",
     });
   }
 }

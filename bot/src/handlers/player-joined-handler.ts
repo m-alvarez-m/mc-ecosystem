@@ -33,6 +33,7 @@ export class PlayerJoinedHandler implements EventHandler {
     await context.publisher.publish({
       title: TITLE,
       body: `${name} se ha unido al servidor.`,
+      kind: "player_joined",
     });
   }
 }

@@ -64,6 +64,7 @@ describe("ServerStoppedHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Servidor detenido",
       body: "Servidor detenido correctamente.",
+      kind: "server_stopped",
     });
   });
 
@@ -90,7 +91,7 @@ describe("ServerStoppedHandler", () => {
     const h = new ServerStoppedHandler();
     await h.handle(fakeContext(publisher), fakeEvent("server.stop"));
     expect(seen).toEqual([
-      { title: "Servidor detenido", body: "Servidor detenido correctamente." },
+      { title: "Servidor detenido", body: "Servidor detenido correctamente.", kind: "server_stopped" },
     ]);
   });
 

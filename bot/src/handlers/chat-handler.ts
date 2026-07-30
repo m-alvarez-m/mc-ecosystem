@@ -53,6 +53,7 @@ export class ChatHandler implements EventHandler {
     await context.publisher.publish({
       title: TITLE,
       body: `${name}: ${message}`,
+      kind: "chat",
     });
   }
 }

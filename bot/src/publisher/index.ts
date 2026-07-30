@@ -1,2 +1,2 @@
 export type { Publisher } from "./publisher";
-export type { PublishPayload } from "./types";
+export type { PublishPayload, MessageKind } from "./types";

@@ -27,6 +27,7 @@ export class PlayerLeftHandler implements EventHandler {
     await context.publisher.publish({
       title: TITLE,
       body: `${name} ha salido del servidor.`,
+      kind: "player_left",
     });
   }
 }

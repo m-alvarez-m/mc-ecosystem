@@ -53,6 +53,7 @@ export class AdvancementHandler implements EventHandler {
     await context.publisher.publish({
       title: TITLE,
       body: `${name} ha conseguido el avance: ${advancement}.`,
+      kind: "advancement",
     });
   }
 }

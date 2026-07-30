@@ -36,7 +36,7 @@ export class PlayerDeathHandler implements EventHandler {
       ? `${name} ha muerto por ${cause}.`
       : `${name} ha muerto.`;
 
-    await context.publisher.publish({ title: TITLE, body });
+    await context.publisher.publish({ title: TITLE, body, kind: "player_death" });
   }
 }
 

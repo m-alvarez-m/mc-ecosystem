@@ -85,6 +85,7 @@ describe("ChatHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Chat",
       body: "Vancorbus: hola mundo",
+      kind: "chat",
     });
   });
 
@@ -113,10 +114,12 @@ describe("ChatHandler", () => {
     expect(publisher.publish.mock.calls[0]![0]).toEqual({
       title: "Chat",
       body: "Pacman26: por aqui",
+      kind: "chat",
     });
     expect(publisher.publish.mock.calls[1]![0]).toEqual({
       title: "Chat",
       body: "Elrid: voy",
+      kind: "chat",
     });
   });
 
@@ -132,6 +135,7 @@ describe("ChatHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Chat",
       body: "Vancorbus:   hola  ",
+      kind: "chat",
     });
   });
 
@@ -147,6 +151,7 @@ describe("ChatHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Chat",
       body: "V: /tp Vancorbus",
+      kind: "chat",
     });
   });
 
@@ -177,6 +182,7 @@ describe("ChatHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Chat",
       body: "V:    ",
+      kind: "chat",
     });
   });
 
@@ -288,7 +294,7 @@ describe("ChatHandler", () => {
       chatEvent({ data: { content: "hola mundo minecraft" } }),
     );
     expect(seen).toEqual([
-      { title: "Chat", body: "Vancorbus: hola mundo minecraft" },
+      { title: "Chat", body: "Vancorbus: hola mundo minecraft", kind: "chat" },
     ]);
   });
 

@@ -14,3 +14,10 @@ export {
 } from "./errors";
 
 export { sanitizeDiscordMessage } from "./sanitize-discord-message";
+
+export {
+  FOOTER_TEXT,
+  KIND_COLORS,
+  NEUTRAL_COLOR,
+  colorForKind,
+} from "./embed-theme";

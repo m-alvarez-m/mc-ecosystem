@@ -71,6 +71,7 @@ describe("ServerStartedHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Servidor iniciado",
       body: "Servidor iniciado correctamente.",
+      kind: "server_started",
     });
   });
 
@@ -100,7 +101,7 @@ describe("ServerStartedHandler", () => {
     const h = new ServerStartedHandler();
     await h.handle(fakeContext(publisher), fakeEvent("server.start"));
     expect(seen).toEqual([
-      { title: "Servidor iniciado", body: "Servidor iniciado correctamente." },
+      { title: "Servidor iniciado", body: "Servidor iniciado correctamente.", kind: "server_started" },
     ]);
   });
 

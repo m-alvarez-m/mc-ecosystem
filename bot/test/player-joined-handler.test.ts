@@ -81,6 +81,7 @@ describe("PlayerJoinedHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Jugador conectado",
       body: "Vancorbus se ha unido al servidor.",
+      kind: "player_joined",
     });
   });
 
@@ -102,10 +103,12 @@ describe("PlayerJoinedHandler", () => {
     expect(publisher.publish.mock.calls[0]![0]).toEqual({
       title: "Jugador conectado",
       body: "Vancorbus se ha unido al servidor.",
+      kind: "player_joined",
     });
     expect(publisher.publish.mock.calls[1]![0]).toEqual({
       title: "Jugador conectado",
       body: "Elrid se ha unido al servidor.",
+      kind: "player_joined",
     });
   });
 
@@ -124,6 +127,7 @@ describe("PlayerJoinedHandler", () => {
     expect(publisher.publish).toHaveBeenCalledWith({
       title: "Jugador conectado",
       body: "NombreCanonico se ha unido al servidor.",
+      kind: "player_joined",
     });
   });
 
@@ -206,7 +210,7 @@ describe("PlayerJoinedHandler", () => {
     const h = new PlayerJoinedHandler();
     await h.handle(fakeContext(publisher, resolver), playerJoinEvent());
     expect(seen).toEqual([
-      { title: "Jugador conectado", body: "Vancorbus se ha unido al servidor." },
+      { title: "Jugador conectado", body: "Vancorbus se ha unido al servidor.", kind: "player_joined" },
     ]);
   });
 });
