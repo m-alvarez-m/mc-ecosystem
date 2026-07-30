@@ -8,6 +8,7 @@ import type { EventHandler } from "../dispatcher";
 import { EventStoreClient } from "../eventstore";
 import { FileCursorStore } from "../cursor";
 import type { CursorStore } from "../cursor";
+import { RuntimeState } from "../observability";
 import { PlayerNameResolver } from "../players";
 import { PollingEngine } from "../polling";
 import {
@@ -89,6 +90,7 @@ export interface AppServices {
   cursorStore: FileCursorStore;
   pollingEngine: PollingEngine;
   playerNameResolver: PlayerNameResolver;
+  runtimeState: RuntimeState;
 }
 
 /**
@@ -176,9 +178,35 @@ export function composeApp(config: Config): App {
     timeoutMs: config.eventStore.timeoutMs,
   });
 
-  // Dispatcher + handlers
+  // Observabilidad runtime (T5): contadores + timestamps + ultimos
+  // errores/eventos. Sin persistencia; se pierde al reiniciar. El
+  // health server futuro (T7) leera runtimeState.snapshot().
+  const runtimeState = new RuntimeState();
+
+  // Dispatcher + handlers. Callbacks cableados directamente a
+  // runtimeState + logger. Politica de logging centralizada AQUI:
+  // ningun handler / cliente / motor imprime nada.
   const context: DispatchContext = { publisher, playerNameResolver };
-  const dispatcher = new EventDispatcher({ context });
+  const dispatcher = new EventDispatcher({
+    context,
+    onUnknown: (event) => {
+      runtimeState.recordUnknownEvent(event);
+      logger.warn(
+        { type: event.type, event_uuid: event.event_uuid },
+        "Evento sin handler registrado",
+      );
+    },
+    onHandled: (event) => {
+      runtimeState.recordEventProcessed(event);
+    },
+    onFailed: (event, err) => {
+      runtimeState.recordHandlerFailure(event, err);
+      logger.error(
+        { err, type: event.type, event_uuid: event.event_uuid },
+        "Handler fallido",
+      );
+    },
+  });
   for (const { eventType, handler } of createHandlerRegistrations(config)) {
     dispatcher.register(eventType, handler);
   }
@@ -191,11 +219,22 @@ export function composeApp(config: Config): App {
   const cursorStore = new FileCursorStore({ filePath: config.cursor.filePath });
 
   // Polling: el consumer entrega lotes al dispatcher (ver ADR-010).
+  // Callbacks instrumentan runtimeState y centralizan logging de
+  // fallos de polling (network, cursor, wrapping de consumer, etc.).
   const pollingEngine = new PollingEngine({
     eventStoreClient,
     cursorStore,
     consumer: (events) => dispatcher.dispatch(events),
     pollIntervalMs: config.polling.intervalMs,
+    onPollStarted: () => runtimeState.recordPollStarted(),
+    onPollCompleted: () => runtimeState.recordPollCompleted(),
+    onError: (err) => {
+      runtimeState.recordPollFailed(err);
+      logger.error(
+        { err, code: err.code },
+        "Iteracion de polling fallida",
+      );
+    },
   });
 
   const services: AppServices = {
@@ -206,6 +245,7 @@ export function composeApp(config: Config): App {
     cursorStore,
     pollingEngine,
     playerNameResolver,
+    runtimeState,
   };
 
   return {

@@ -12,6 +12,7 @@ import { EventStoreClient } from "../src/eventstore";
 import { FileCursorStore } from "../src/cursor";
 import { PollingEngine } from "../src/polling";
 import { PlayerNameResolver } from "../src/players";
+import { RuntimeState } from "../src/observability";
 import {
   ServerStartedHandler,
   ServerStoppedHandler,
@@ -133,6 +134,48 @@ describe("composeApp", () => {
     expect(app.services.cursorStore).toBeInstanceOf(FileCursorStore);
     expect(app.services.pollingEngine).toBeInstanceOf(PollingEngine);
     expect(app.services.playerNameResolver).toBeInstanceOf(PlayerNameResolver);
+    expect(app.services.runtimeState).toBeInstanceOf(RuntimeState);
+  });
+
+  it("runtimeState arranca en cero: cero eventos procesados, cero errores, timestamps null", () => {
+    const app = composeApp(fakeConfig());
+    const s = app.services.runtimeState.snapshot();
+
+    expect(s.processedTotal).toBe(0);
+    expect(s.unknownEventsTotal).toBe(0);
+    expect(s.pollingErrorsTotal).toBe(0);
+    expect(s.handlerErrorsTotal).toBe(0);
+    expect(s.lastPollAt).toBeNull();
+    expect(s.lastPollSucceededAt).toBeNull();
+    expect(s.lastError).toBeNull();
+    expect(s.lastEventProcessed).toBeNull();
+  });
+
+  it("dispatcher wired: onUnknown incrementa runtimeState.unknownEventsTotal", async () => {
+    // Dispatch de un tipo NO registrado a traves del dispatcher REAL
+    // compuesto — verifica que el callback onUnknown esta cableado a
+    // runtimeState. No dispara ningun handler, cero side effects.
+    const app = composeApp(fakeConfig());
+    const unknownEvent = {
+      id: "1",
+      event_uuid: "00000000-0000-4000-8000-000000000001",
+      type: "tipo.que.nadie.registra",
+      v: 1,
+      ts: "2026-07-27T00:00:00.000Z",
+      received_at: "2026-07-27T00:00:00.010Z",
+      player_uuid: null,
+      world: null,
+      x: null,
+      y: null,
+      z: null,
+      data: {},
+    };
+
+    await app.services.dispatcher.dispatch([unknownEvent]);
+
+    const s = app.services.runtimeState.snapshot();
+    expect(s.unknownEventsTotal).toBe(1);
+    expect(s.processedTotal).toBe(0);
   });
 
   it("expone start() y stop() como unico punto de entrada operacional", () => {

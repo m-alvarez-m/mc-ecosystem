@@ -1,7 +1,11 @@
 import type { EventRecord } from "../eventstore";
 import type { DispatchContext } from "../context";
 import type { EventHandler } from "./handler";
-import type { OnUnknownEventCallback } from "./types";
+import type {
+  OnHandledEventCallback,
+  OnHandlerFailedCallback,
+  OnUnknownEventCallback,
+} from "./types";
 import { HandlerRegistry } from "./registry";
 import { HandlerExecutionError } from "./errors";
 
@@ -40,16 +44,35 @@ export interface EventDispatcherOptions {
    * procesamiento del lote).
    */
   onUnknown?: OnUnknownEventCallback;
+
+  /**
+   * Callback opcional invocado por cada evento entregado con exito a
+   * un handler. Uso: instrumentacion (contadores, timestamps). Mismo
+   * contrato defensivo que onUnknown.
+   */
+  onHandled?: OnHandledEventCallback;
+
+  /**
+   * Callback opcional invocado cuando un handler lanza. Recibe el
+   * error CRUDO (antes de envolver en HandlerExecutionError) para que
+   * la observabilidad pueda registrar el codigo del error real. Mismo
+   * contrato defensivo.
+   */
+  onFailed?: OnHandlerFailedCallback;
 }
 
 export class EventDispatcher {
   private readonly registry = new HandlerRegistry();
   private readonly context: DispatchContext;
   private readonly onUnknown?: OnUnknownEventCallback;
+  private readonly onHandled?: OnHandledEventCallback;
+  private readonly onFailed?: OnHandlerFailedCallback;
 
   constructor(options: EventDispatcherOptions) {
     this.context = options.context;
     this.onUnknown = options.onUnknown;
+    this.onHandled = options.onHandled;
+    this.onFailed = options.onFailed;
   }
 
   /** Registra `handler` bajo `eventType`. Ver HandlerRegistry.register. */
@@ -97,7 +120,21 @@ export class EventDispatcher {
       try {
         await handler.handle(this.context, event);
       } catch (err) {
+        if (this.onFailed !== undefined) {
+          try {
+            this.onFailed(event, err);
+          } catch {
+            /* swallow: la observabilidad no debe romper el dispatch */
+          }
+        }
         throw new HandlerExecutionError(event.type, event.id, errCause(err));
+      }
+      if (this.onHandled !== undefined) {
+        try {
+          this.onHandled(event);
+        } catch {
+          /* swallow: la observabilidad no debe romper el dispatch */
+        }
       }
     }
   }

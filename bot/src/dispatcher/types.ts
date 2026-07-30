@@ -13,3 +13,20 @@ import type { EventRecord } from "../eventstore";
  * el siguiente evento del lote (no aborta el batch).
  */
 export type OnUnknownEventCallback = (event: EventRecord) => void;
+
+/**
+ * Callback opcional invocado por cada evento entregado con exito a un
+ * handler (handle() resolvio sin lanzar). Uso: instrumentacion. Si
+ * lanza, el dispatcher swallow la excepcion — la observabilidad no
+ * debe romper el dispatch.
+ */
+export type OnHandledEventCallback = (event: EventRecord) => void;
+
+/**
+ * Callback opcional invocado cuando un handler lanza. Recibe el
+ * evento y el error CRUDO (antes de que el dispatcher lo envuelva en
+ * HandlerExecutionError). Uso: instrumentacion. Si el propio callback
+ * lanza, el dispatcher swallow: el error del handler se propaga igual
+ * como HandlerExecutionError.
+ */
+export type OnHandlerFailedCallback = (event: EventRecord, err: unknown) => void;

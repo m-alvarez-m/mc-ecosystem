@@ -335,4 +335,93 @@ describe("EventDispatcher", () => {
   it("lote vacio: no hace nada, no lanza", async () => {
     await expect(dispatcher.dispatch([])).resolves.toBeUndefined();
   });
+
+  // ---------- Callbacks de observabilidad (T5 v1.1) ----------
+
+  it("onHandled se invoca una vez por evento entregado con exito", async () => {
+    const onHandled = vi.fn();
+    const d = new EventDispatcher({ context, onHandled });
+    d.register("a", fakeHandler(["a"]));
+    d.register("b", fakeHandler(["b"]));
+
+    await d.dispatch([fakeEvent("1", "a"), fakeEvent("2", "b"), fakeEvent("3", "a")]);
+
+    expect(onHandled).toHaveBeenCalledTimes(3);
+    expect(onHandled.mock.calls[0]![0]!.id).toBe("1");
+    expect(onHandled.mock.calls[1]![0]!.id).toBe("2");
+    expect(onHandled.mock.calls[2]![0]!.id).toBe("3");
+  });
+
+  it("onHandled NO se invoca para eventos desconocidos (sólo onUnknown)", async () => {
+    const onHandled = vi.fn();
+    const onUnknown = vi.fn();
+    const d = new EventDispatcher({ context, onHandled, onUnknown });
+    d.register("a", fakeHandler(["a"]));
+
+    await d.dispatch([fakeEvent("1", "a"), fakeEvent("2", "desconocido")]);
+
+    expect(onHandled).toHaveBeenCalledTimes(1);
+    expect(onHandled.mock.calls[0]![0]!.type).toBe("a");
+    expect(onUnknown).toHaveBeenCalledTimes(1);
+    expect(onUnknown.mock.calls[0]![0]!.type).toBe("desconocido");
+  });
+
+  it("onFailed se invoca con el evento y el error CRUDO cuando el handler lanza", async () => {
+    const raw = Object.assign(new Error("no name"), { code: "MISSING_PLAYER_UUID" });
+    const onFailed = vi.fn();
+    const d = new EventDispatcher({ context, onFailed });
+    d.register(
+      "session.start",
+      fakeHandler(["session.start"], async () => {
+        throw raw;
+      }),
+    );
+
+    await expect(
+      d.dispatch([fakeEvent("1", "session.start")]),
+    ).rejects.toThrow(); // wrapped como HandlerExecutionError
+
+    expect(onFailed).toHaveBeenCalledOnce();
+    expect(onFailed.mock.calls[0]![0]!.id).toBe("1");
+    expect(onFailed.mock.calls[0]![1]).toBe(raw); // error CRUDO, no wrapped
+  });
+
+  it("onFailed NO se invoca cuando el handler resuelve OK", async () => {
+    const onFailed = vi.fn();
+    const d = new EventDispatcher({ context, onFailed });
+    d.register("a", fakeHandler(["a"]));
+
+    await d.dispatch([fakeEvent("1", "a")]);
+
+    expect(onFailed).not.toHaveBeenCalled();
+  });
+
+  it("onHandled que lanza NO rompe el dispatch (swallow defensivo)", async () => {
+    const onHandled = vi.fn(() => {
+      throw new Error("observabilidad rota");
+    });
+    const d = new EventDispatcher({ context, onHandled });
+    d.register("a", fakeHandler(["a"]));
+
+    await expect(d.dispatch([fakeEvent("1", "a")])).resolves.toBeUndefined();
+    expect(onHandled).toHaveBeenCalledOnce();
+  });
+
+  it("onFailed que lanza NO rompe la propagacion del HandlerExecutionError", async () => {
+    const raw = new Error("handler boom");
+    const onFailed = vi.fn(() => {
+      throw new Error("observabilidad rota");
+    });
+    const d = new EventDispatcher({ context, onFailed });
+    d.register(
+      "a",
+      fakeHandler(["a"], async () => {
+        throw raw;
+      }),
+    );
+
+    // El HandlerExecutionError se sigue propagando aunque onFailed lance.
+    await expect(d.dispatch([fakeEvent("1", "a")])).rejects.toThrow();
+    expect(onFailed).toHaveBeenCalledOnce();
+  });
 });

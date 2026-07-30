@@ -344,4 +344,102 @@ describe("PollingEngine", () => {
     await stopPromise;
     expect(stopped).toBe(true);
   });
+
+  // ---------- Callbacks de observabilidad (T5 v1.1) ----------
+
+  it("onPollStarted se invoca al inicio de cada iteracion", async () => {
+    const cursorStore = new FakeCursorStore();
+    const getEvents = vi.fn(async () => ({ events: [], last_id: null }));
+    const started = vi.fn();
+    const engine = new PollingEngine({
+      eventStoreClient: { getEvents } as unknown as EventFetcher,
+      cursorStore,
+      consumer: async () => undefined,
+      pollIntervalMs: 20,
+      onPollStarted: started,
+    });
+
+    await engine.start();
+    await sleep(70); // ~3 ciclos
+    await engine.stop();
+
+    // Al menos 2 arranques (con margen para varianza de scheduling).
+    expect(started.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("onPollCompleted se invoca cuando pollOnce termina sin error", async () => {
+    const cursorStore = new FakeCursorStore();
+    const getEvents = vi.fn(async () => ({ events: [], last_id: null }));
+    const started = vi.fn();
+    const completed = vi.fn();
+    const engine = new PollingEngine({
+      eventStoreClient: { getEvents } as unknown as EventFetcher,
+      cursorStore,
+      consumer: async () => undefined,
+      pollIntervalMs: 20,
+      onPollStarted: started,
+      onPollCompleted: completed,
+    });
+
+    await engine.start();
+    await sleep(70);
+    await engine.stop();
+
+    // Cada started sano termina con un completed.
+    expect(completed.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(completed.mock.calls.length).toBe(started.mock.calls.length);
+  });
+
+  it("onPollCompleted NO se invoca cuando pollOnce lanza (sólo onError)", async () => {
+    const cursorStore = new FakeCursorStore();
+    const boom = new Error("fetch caido");
+    const getEvents = vi.fn(async () => {
+      throw boom;
+    });
+    const started = vi.fn();
+    const completed = vi.fn();
+    const errors: PollingEngineError[] = [];
+    const engine = new PollingEngine({
+      eventStoreClient: { getEvents } as unknown as EventFetcher,
+      cursorStore,
+      consumer: async () => undefined,
+      pollIntervalMs: 20,
+      onPollStarted: started,
+      onPollCompleted: completed,
+      onError: (err) => errors.push(err),
+    });
+
+    await engine.start();
+    await sleep(70);
+    await engine.stop();
+
+    expect(started.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(completed).not.toHaveBeenCalled();
+    expect(errors.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("onPollStarted que lanza NO rompe el polling (swallow defensivo)", async () => {
+    const cursorStore = new FakeCursorStore();
+    const getEvents = vi.fn(async () => ({ events: [], last_id: null }));
+    const started = vi.fn(() => {
+      throw new Error("observabilidad rota");
+    });
+    const completed = vi.fn();
+    const engine = new PollingEngine({
+      eventStoreClient: { getEvents } as unknown as EventFetcher,
+      cursorStore,
+      consumer: async () => undefined,
+      pollIntervalMs: 20,
+      onPollStarted: started,
+      onPollCompleted: completed,
+    });
+
+    await engine.start();
+    await sleep(70);
+    await engine.stop();
+
+    // Started se llamo pero su excepcion se swallow; completed sí corre.
+    expect(started.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(completed.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
 });

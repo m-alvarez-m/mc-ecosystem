@@ -47,6 +47,19 @@ export interface PollingEngineOptions {
    * la responsabilidad de definir su politica de observabilidad).
    */
   onError?: (err: PollingEngineError) => void;
+  /**
+   * Callback invocado al inicio de cada iteracion, antes de intentar
+   * cualquier IO. Uso: instrumentacion (contadores, timestamps). Si
+   * lanza, el error se swallow — la observabilidad no debe romper el
+   * polling.
+   */
+  onPollStarted?: () => void;
+  /**
+   * Callback invocado cuando la iteracion termino sin error (haya o
+   * no eventos que procesar). Uso: instrumentacion. Mismo contrato
+   * defensivo que onPollStarted: si lanza, se swallow.
+   */
+  onPollCompleted?: () => void;
 }
 
 export class PollingEngine {
@@ -55,6 +68,8 @@ export class PollingEngine {
   private readonly consumer: PollingConsumer;
   private readonly pollIntervalMs: number;
   private readonly onError?: (err: PollingEngineError) => void;
+  private readonly onPollStarted?: () => void;
+  private readonly onPollCompleted?: () => void;
 
   private running = false;
   private loopPromise: Promise<void> | null = null;
@@ -66,6 +81,8 @@ export class PollingEngine {
     this.consumer = options.consumer;
     this.pollIntervalMs = options.pollIntervalMs;
     this.onError = options.onError;
+    this.onPollStarted = options.onPollStarted;
+    this.onPollCompleted = options.onPollCompleted;
   }
 
   isRunning(): boolean {
@@ -109,8 +126,13 @@ export class PollingEngine {
   private async loop(): Promise<void> {
     try {
       while (this.running) {
+        // Hooks de observabilidad envueltos en try/catch para que la
+        // instrumentacion nunca rompa el polling. Semanticamente
+        // esperados a ser triviales (contadores in-memory).
+        this.safeEmitStarted();
         try {
           await this.pollOnce();
+          this.safeEmitCompleted();
         } catch (err) {
           // pollOnce siempre lanza PollingEngineError ya envuelto.
           if (err instanceof PollingEngineError) {
@@ -128,6 +150,24 @@ export class PollingEngine {
       // pasa: taxonomia lo cubre y el consumidor se entera.
       this.running = false;
       this.emit(new UnexpectedStopError(errCause(err)));
+    }
+  }
+
+  private safeEmitStarted(): void {
+    if (this.onPollStarted === undefined) return;
+    try {
+      this.onPollStarted();
+    } catch {
+      /* swallow: la observabilidad no debe romper el polling */
+    }
+  }
+
+  private safeEmitCompleted(): void {
+    if (this.onPollCompleted === undefined) return;
+    try {
+      this.onPollCompleted();
+    } catch {
+      /* swallow: la observabilidad no debe romper el polling */
     }
   }
 
