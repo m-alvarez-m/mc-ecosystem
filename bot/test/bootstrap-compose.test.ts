@@ -141,12 +141,12 @@ describe("composeApp", () => {
     const app = composeApp(fakeConfig());
     const s = app.services.runtimeState.snapshot();
 
-    expect(s.processedTotal).toBe(0);
+    expect(s.processedEventsTotal).toBe(0);
     expect(s.unknownEventsTotal).toBe(0);
     expect(s.pollingErrorsTotal).toBe(0);
     expect(s.handlerErrorsTotal).toBe(0);
     expect(s.lastPollAt).toBeNull();
-    expect(s.lastPollSucceededAt).toBeNull();
+    expect(s.lastSuccessfulPollAt).toBeNull();
     expect(s.lastError).toBeNull();
     expect(s.lastEventProcessed).toBeNull();
   });
@@ -175,7 +175,7 @@ describe("composeApp", () => {
 
     const s = app.services.runtimeState.snapshot();
     expect(s.unknownEventsTotal).toBe(1);
-    expect(s.processedTotal).toBe(0);
+    expect(s.processedEventsTotal).toBe(0);
   });
 
   it("expone start() y stop() como unico punto de entrada operacional", () => {

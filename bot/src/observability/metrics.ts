@@ -10,7 +10,7 @@ export type ErrorScope = "polling" | "handler";
 
 export interface LastErrorRecord {
   /** ISO 8601 UTC del momento en que se registro el error. */
-  at: string;
+  timestamp: string;
   scope: ErrorScope;
   /** Codigo estable del error (`err.code` si existe, si no `err.name`). */
   code: string;
@@ -22,7 +22,7 @@ export interface LastErrorRecord {
 
 export interface LastEventProcessedRecord {
   /** ISO 8601 UTC del momento en que se registro el procesamiento. */
-  at: string;
+  timestamp: string;
   /** `id` (BIGINT como string) del evento. */
   id: string;
   type: string;
@@ -37,7 +37,7 @@ export interface LastEventProcessedRecord {
  */
 export interface RuntimeSnapshot {
   /** Numero total de eventos dispatched a un handler con exito. */
-  processedTotal: number;
+  processedEventsTotal: number;
   /**
    * Numero de eventos procesados por tipo. Sólo aparecen tipos que
    * efectivamente pasaron por un handler al menos una vez (los tipos
@@ -65,7 +65,7 @@ export interface RuntimeSnapshot {
   /** ISO del momento en que arranco el ultimo poll (start hook). */
   lastPollAt: string | null;
   /** ISO del momento en que el ultimo poll termino con exito. */
-  lastPollSucceededAt: string | null;
+  lastSuccessfulPollAt: string | null;
 
   /** Detalle del ultimo error registrado (polling o handler). */
   lastError: LastErrorRecord | null;

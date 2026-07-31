@@ -87,13 +87,15 @@ export async function main(
   // 2) Composicion del grafo. Puro y sincronico: no toca IO.
   const app = composeAppFn(config);
 
-  // 3) Health server. Usa el MISMO Discord client que la app compuesta
-  //    (via app.services.client) — evita duplicar clientes y refleja
-  //    el estado real del bot en /health.
+  // 3) Health server. Usa el MISMO Discord client y el MISMO runtime
+  //    state que la app compuesta (via app.services). GET /health
+  //    incluye runtimeState.snapshot() (T7): metricas y ultimos
+  //    errores estan expuestos sin re-instrumentar.
   const server = startHealthServerFn({
     client: app.services.client,
     port: config.server.port,
     logger,
+    runtimeState: app.services.runtimeState,
   });
 
   // 4) Shutdown: SIGINT / SIGTERM -> app.stop() + server.close() -> exit(0).

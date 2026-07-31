@@ -23,14 +23,14 @@ import type {
 // para lecturas puntuales (tests, health server futuro).
 
 export class RuntimeState {
-  private processedTotal = 0;
+  private processedEventsTotal = 0;
   private readonly processedByType = new Map<string, number>();
   private unknownEventsTotal = 0;
   private pollingErrorsTotal = 0;
   private handlerErrorsTotal = 0;
 
   private lastPollAt: string | null = null;
-  private lastPollSucceededAt: string | null = null;
+  private lastSuccessfulPollAt: string | null = null;
 
   private lastError: LastErrorRecord | null = null;
   private lastEventProcessed: LastEventProcessedRecord | null = null;
@@ -42,7 +42,7 @@ export class RuntimeState {
 
   /** Se invoca cuando la iteracion termino sin error. */
   recordPollCompleted(): void {
-    this.lastPollSucceededAt = nowIso();
+    this.lastSuccessfulPollAt = nowIso();
   }
 
   /**
@@ -58,13 +58,13 @@ export class RuntimeState {
 
   /** Se invoca por cada evento entregado con exito a un handler. */
   recordEventProcessed(event: EventRecord): void {
-    this.processedTotal++;
+    this.processedEventsTotal++;
     this.processedByType.set(
       event.type,
       (this.processedByType.get(event.type) ?? 0) + 1,
     );
     this.lastEventProcessed = {
-      at: nowIso(),
+      timestamp: nowIso(),
       id: event.id,
       type: event.type,
       eventUuid: event.event_uuid,
@@ -94,13 +94,13 @@ export class RuntimeState {
    */
   snapshot(): RuntimeSnapshot {
     return {
-      processedTotal: this.processedTotal,
+      processedEventsTotal: this.processedEventsTotal,
       processedByType: Object.freeze({ ...Object.fromEntries(this.processedByType) }),
       unknownEventsTotal: this.unknownEventsTotal,
       pollingErrorsTotal: this.pollingErrorsTotal,
       handlerErrorsTotal: this.handlerErrorsTotal,
       lastPollAt: this.lastPollAt,
-      lastPollSucceededAt: this.lastPollSucceededAt,
+      lastSuccessfulPollAt: this.lastSuccessfulPollAt,
       lastError: this.lastError === null ? null : { ...this.lastError },
       lastEventProcessed:
         this.lastEventProcessed === null ? null : { ...this.lastEventProcessed },
@@ -129,7 +129,7 @@ function buildErrorRecord(
   const code = extractCode(err);
   const message = err instanceof Error ? err.message : String(err);
   const record: LastErrorRecord = {
-    at: nowIso(),
+    timestamp: nowIso(),
     scope,
     code,
     message,

@@ -30,13 +30,13 @@ describe("RuntimeState", () => {
     const state = new RuntimeState();
     const s = state.snapshot();
 
-    expect(s.processedTotal).toBe(0);
+    expect(s.processedEventsTotal).toBe(0);
     expect(Object.keys(s.processedByType)).toHaveLength(0);
     expect(s.unknownEventsTotal).toBe(0);
     expect(s.pollingErrorsTotal).toBe(0);
     expect(s.handlerErrorsTotal).toBe(0);
     expect(s.lastPollAt).toBeNull();
-    expect(s.lastPollSucceededAt).toBeNull();
+    expect(s.lastSuccessfulPollAt).toBeNull();
     expect(s.lastError).toBeNull();
     expect(s.lastEventProcessed).toBeNull();
   });
@@ -49,7 +49,7 @@ describe("RuntimeState", () => {
     state.recordEventProcessed(fakeEvent({ id: "3", type: "session.start" }));
 
     const s = state.snapshot();
-    expect(s.processedTotal).toBe(3);
+    expect(s.processedEventsTotal).toBe(3);
     expect(s.processedByType["chat.message"]).toBe(2);
     expect(s.processedByType["session.start"]).toBe(1);
   });
@@ -70,7 +70,7 @@ describe("RuntimeState", () => {
     expect(s.lastEventProcessed!.type).toBe("chat.message");
     expect(s.lastEventProcessed!.eventUuid).toBe("bbbb");
     // ISO 8601 parseable.
-    expect(new Date(s.lastEventProcessed!.at).getTime()).toBeGreaterThan(0);
+    expect(new Date(s.lastEventProcessed!.timestamp).getTime()).toBeGreaterThan(0);
   });
 
   it("contador de unknown events se incrementa por cada evento sin handler", () => {
@@ -90,16 +90,16 @@ describe("RuntimeState", () => {
     const s = state.snapshot();
     expect(s.lastPollAt).not.toBeNull();
     expect(new Date(s.lastPollAt!).getTime()).toBeGreaterThan(0);
-    expect(s.lastPollSucceededAt).toBeNull();
+    expect(s.lastSuccessfulPollAt).toBeNull();
   });
 
-  it("recordPollCompleted actualiza lastPollSucceededAt", () => {
+  it("recordPollCompleted actualiza lastSuccessfulPollAt", () => {
     const state = new RuntimeState();
     state.recordPollStarted();
     state.recordPollCompleted();
 
     const s = state.snapshot();
-    expect(s.lastPollSucceededAt).not.toBeNull();
+    expect(s.lastSuccessfulPollAt).not.toBeNull();
   });
 
   it("recordPollFailed incrementa pollingErrorsTotal y registra lastError (scope polling)", () => {
@@ -199,6 +199,6 @@ describe("RuntimeState", () => {
     for (let i = 0; i < 100; i++) {
       state.recordEventProcessed(fakeEvent({ id: String(i) }));
     }
-    expect(state.snapshot().processedTotal).toBe(100);
+    expect(state.snapshot().processedEventsTotal).toBe(100);
   });
 });
