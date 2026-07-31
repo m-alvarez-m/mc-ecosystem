@@ -64,3 +64,101 @@ que se planifique el trabajo mencionado.
 
 - Commit del catálogo manual: `fa6e3b0`.
 - Módulo afectado: `bot/src/minecraft/`.
+
+---
+
+## TD-002 · Narrativas contextuales para Death Chronicle
+
+**Descripción**
+
+El motor narrativo actual de Death Chronicle
+(`bot/src/minecraft/death-catalog.ts`, introducido en el commit
+`b150f17 feat(minecraft): introduce death chronicle catalog` como
+parte de Pulso v1.1) selecciona una frase basándose únicamente en
+dos señales del evento: la `cause` de daño (`DamageCause` de Bukkit)
+y opcionalmente el `killer_mob` (namespaced key). El resto del
+contexto del evento se descarta.
+
+El flujo actual es:
+
+```
+cause (+ killer_mob)
+    ↓
+categoría (lookup)
+    ↓
+pool de frases
+    ↓
+selección aleatoria uniforme
+    ↓
+frase
+```
+
+Esto produce narraciones correctas y con personalidad, pero planas:
+todas las muertes por lava se cuentan igual independientemente de si
+ocurrieron en el Overworld o el Nether, de día o de noche, con
+diamante o desnudo, en una base o explorando; todas las muertes por
+Creeper se cuentan igual sin distinguir si el jugador estaba huyendo
+de una horda de zombies o construyendo tranquilamente.
+
+**Objetivo futuro**
+
+En Insight (v2) el motor narrativo deberá construir la narración
+utilizando el contexto completo del evento, no sólo la causa. La
+arquitectura debe evolucionar hacia:
+
+```
+DeathContext (evento + contexto enriquecido)
+    ↓
+Narrative Engine (reglas + selección contextual)
+    ↓
+Narrative (frase construida a partir del contexto real)
+```
+
+Señales a incorporar al `DeathContext` (subset esperado, ampliable):
+
+- dimensión (Overworld / Nether / End)
+- asesino (jugador / mob / entorno)
+- arma o proyectil concreto que remató
+- tipo de entidad y variante (baby zombie ≠ husk ≠ drowned)
+- dificultad del servidor
+- coordenadas (bioma "reconocible", altura Y, distancia al spawn)
+- tiempo del mundo (día / noche / amanecer)
+- clima (lluvia, tormenta)
+- bioma concreto
+- estadísticas del jugador (equipamiento, salud previa,
+  encantamientos, efectos activos)
+- historial reciente del jugador (racha de muertes, tiempo desde el
+  último respawn, actividad previa)
+
+El nuevo motor deberá:
+
+- reemplazar la selección uniforme por un ranking o composición
+  basada en el contexto;
+- permitir plantillas paramétricas (no sólo frases cerradas);
+- mantener la política de fidelidad al evento (no inventar
+  entidades, causas ni jugadores);
+- mantener el fallback a `data.message` vanilla cuando el contexto
+  no alcanza a producir una narración.
+
+**Motivación**
+
+- Elevar la calidad narrativa: menos repetición percibida, mayor
+  variedad efectiva por evento.
+- Diferenciar situaciones que hoy colapsan en la misma frase.
+- Aprovechar el contexto que el plugin ya emite (o puede emitir) y
+  que el catálogo actual descarta.
+- Preparar el terreno para Insight (v2), donde el motor narrativo
+  será un componente de primera clase reutilizado por varios
+  productos del ecosistema.
+
+**Estado**
+
+Deferred. Se acepta el catálogo actual con selección por causa como
+solución funcionalmente correcta para Pulso v1.1. No requiere acción
+hasta que se planifique Insight (v2).
+
+**Referencias**
+
+- Commit del catálogo actual: `b150f17`.
+- Módulo afectado: `bot/src/minecraft/death-catalog.ts`.
+- Handler afectado: `bot/src/handlers/player-death-handler.ts`.
