@@ -14,3 +14,6 @@
 
 export { ADVANCEMENT_CATALOG } from "./advancement-catalog";
 export type { Advancement } from "./advancement-catalog";
+
+export { narrateDeath } from "./death-catalog";
+export type { DeathInput } from "./death-catalog";
