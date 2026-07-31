@@ -11,3 +11,4 @@ export { AdvancementHandler, MissingAdvancementNameError } from "./advancement-h
 export { ChatHandler, MissingChatMessageError } from "./chat-handler";
 export { TpsHandler, InvalidTpsError } from "./tps-handler";
 export { BackupHandler, InvalidBackupPayloadError } from "./backup-handler";
+export { DimensionHandler, MissingDimensionError } from "./dimension-handler";

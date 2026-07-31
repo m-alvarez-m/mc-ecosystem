@@ -110,6 +110,7 @@ describe("DiscordPublisher", () => {
     ["chat", KIND_COLORS.chat],
     ["tps_degraded", KIND_COLORS.tps_degraded],
     ["backup", KIND_COLORS.backup],
+    ["dimension_first_enter", KIND_COLORS.dimension_first_enter],
   ] as const)("cada tipo usa el color esperado: %s", async (kind, expected) => {
     const channel = makeChannel();
     const client = makeFakeClient({ ready: true, channel });

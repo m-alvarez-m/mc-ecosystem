@@ -21,6 +21,7 @@ import {
   ChatHandler,
   TpsHandler,
   BackupHandler,
+  DimensionHandler,
 } from "../handlers";
 import type { Client } from "discord.js";
 
@@ -73,6 +74,7 @@ export function createHandlerRegistrations(config: Config): ReadonlyArray<{
       handler: new TpsHandler({ alertThreshold: config.tps.alertThreshold }),
     },
     { eventType: "backup.done", handler: new BackupHandler() },
+    { eventType: "dimension.enter", handler: new DimensionHandler() },
   ];
 }
 

@@ -21,6 +21,7 @@ const EXPECTED_KINDS: readonly MessageKind[] = [
   "chat",
   "tps_degraded",
   "backup",
+  "dimension_first_enter",
 ];
 
 describe("embed-theme", () => {
@@ -28,7 +29,7 @@ describe("embed-theme", () => {
     expect(FOOTER_TEXT.trim().length).toBeGreaterThan(0);
   });
 
-  it("KIND_COLORS cubre exactamente los 9 kinds de MessageKind", () => {
+  it("KIND_COLORS cubre exactamente los 10 kinds de MessageKind", () => {
     const catalogKinds = Object.keys(KIND_COLORS).sort();
     const expected = [...EXPECTED_KINDS].sort();
     expect(catalogKinds).toEqual(expected);
