@@ -53,6 +53,7 @@ export const KIND_COLORS: Readonly<Record<MessageKind, number>> = {
   player_kill: 0xe74c3c, // rojo (duelo PvP)
   craft_milestone: 0xf1c40f, // oro brillante (hito de crafteo)
   villager_trade: 0x27ae60, // verde esmeralda (comercio con aldeanos)
+  progress: 0x8e44ad, // wisteria (evolución/encantamientos notables del servidor)
 };
 
 /**
