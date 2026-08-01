@@ -25,6 +25,7 @@ import {
   ServerMilestoneHandler,
   BossKillHandler,
   PlayerKillHandler,
+  CraftHandler,
 } from "../handlers";
 import type { Client } from "discord.js";
 
@@ -81,6 +82,7 @@ export function createHandlerRegistrations(config: Config): ReadonlyArray<{
     { eventType: "milestone.first", handler: new ServerMilestoneHandler() },
     { eventType: "boss.kill", handler: new BossKillHandler() },
     { eventType: "player.kill", handler: new PlayerKillHandler() },
+    { eventType: "item.craft", handler: new CraftHandler() },
   ];
 }
 

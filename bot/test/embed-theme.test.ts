@@ -25,6 +25,7 @@ const EXPECTED_KINDS: readonly MessageKind[] = [
   "server_milestone",
   "boss_kill",
   "player_kill",
+  "craft_milestone",
 ];
 
 describe("embed-theme", () => {
@@ -32,7 +33,7 @@ describe("embed-theme", () => {
     expect(FOOTER_TEXT.trim().length).toBeGreaterThan(0);
   });
 
-  it("KIND_COLORS cubre exactamente los 13 kinds de MessageKind", () => {
+  it("KIND_COLORS cubre exactamente los 14 kinds de MessageKind", () => {
     const catalogKinds = Object.keys(KIND_COLORS).sort();
     const expected = [...EXPECTED_KINDS].sort();
     expect(catalogKinds).toEqual(expected);
@@ -73,5 +74,6 @@ describe("embed-theme", () => {
     expect(KIND_COLORS.server_milestone).toBe(0xf39c12); // dorado
     expect(KIND_COLORS.boss_kill).toBe(0xc0392b); // rojo profundo
     expect(KIND_COLORS.player_kill).toBe(0xe74c3c); // rojo (duelo PvP)
+    expect(KIND_COLORS.craft_milestone).toBe(0xf1c40f); // oro brillante
   });
 });

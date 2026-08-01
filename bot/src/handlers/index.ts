@@ -21,3 +21,4 @@ export {
   PlayerKillHandler,
   MissingVictimUuidError,
 } from "./player-kill-handler";
+export { CraftHandler } from "./craft-handler";

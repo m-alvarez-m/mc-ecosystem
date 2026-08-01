@@ -29,3 +29,6 @@ export type { BossKillInput } from "./boss-catalog";
 
 export { narratePvpKill } from "./pvp-catalog";
 export type { PvpKillInput } from "./pvp-catalog";
+
+export { narrateCraft } from "./craft-catalog";
+export type { CraftInput } from "./craft-catalog";
