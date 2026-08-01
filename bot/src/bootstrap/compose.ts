@@ -24,6 +24,7 @@ import {
   DimensionHandler,
   ServerMilestoneHandler,
   BossKillHandler,
+  PlayerKillHandler,
 } from "../handlers";
 import type { Client } from "discord.js";
 
@@ -79,6 +80,7 @@ export function createHandlerRegistrations(config: Config): ReadonlyArray<{
     { eventType: "dimension.enter", handler: new DimensionHandler() },
     { eventType: "milestone.first", handler: new ServerMilestoneHandler() },
     { eventType: "boss.kill", handler: new BossKillHandler() },
+    { eventType: "player.kill", handler: new PlayerKillHandler() },
   ];
 }
 

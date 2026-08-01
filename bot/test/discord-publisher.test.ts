@@ -113,6 +113,7 @@ describe("DiscordPublisher", () => {
     ["dimension_first_enter", KIND_COLORS.dimension_first_enter],
     ["server_milestone", KIND_COLORS.server_milestone],
     ["boss_kill", KIND_COLORS.boss_kill],
+    ["player_kill", KIND_COLORS.player_kill],
   ] as const)("cada tipo usa el color esperado: %s", async (kind, expected) => {
     const channel = makeChannel();
     const client = makeFakeClient({ ready: true, channel });

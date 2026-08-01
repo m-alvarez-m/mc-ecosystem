@@ -26,3 +26,6 @@ export type { ServerMilestoneInput } from "./server-milestone-catalog";
 
 export { narrateBossKill } from "./boss-catalog";
 export type { BossKillInput } from "./boss-catalog";
+
+export { narratePvpKill } from "./pvp-catalog";
+export type { PvpKillInput } from "./pvp-catalog";

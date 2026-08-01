@@ -17,3 +17,7 @@ export {
   MissingMilestoneWhatError,
 } from "./server-milestone-handler";
 export { BossKillHandler, MissingBossError } from "./boss-kill-handler";
+export {
+  PlayerKillHandler,
+  MissingVictimUuidError,
+} from "./player-kill-handler";

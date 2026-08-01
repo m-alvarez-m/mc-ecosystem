@@ -162,3 +162,92 @@ hasta que se planifique Insight (v2).
 - Commit del catálogo actual: `b150f17`.
 - Módulo afectado: `bot/src/minecraft/death-catalog.ts`.
 - Handler afectado: `bot/src/handlers/player-death-handler.ts`.
+
+---
+
+## TD-003 · Extraer utilidad común para catálogos narrativos
+
+**Descripción**
+
+Cinco módulos en `bot/src/minecraft/` implementan el mismo patrón
+estructural de catálogo narrativo, introducidos por T8..T12 de
+Pulso v1.1:
+
+- `death-catalog.ts` (T8, commit `b150f17`)
+- `dimension-catalog.ts` (T9, commit `0b07544`)
+- `server-milestone-catalog.ts` (T10, commit `c36b70d`)
+- `boss-catalog.ts` (T11, commit `bb360ba`)
+- `pvp-catalog.ts` (T12, commit pendiente)
+
+Todos comparten la misma anatomía:
+
+1. Un tipo `Variant` (función que interpola nombre/s y devuelve string).
+2. Uno o varios arrays `readonly Variant[]` por categoría.
+3. Un `Readonly<Record<Category, readonly Variant[]>>` como VARIANTS.
+4. Una tabla de lookup `ReadonlyMap<string, Category>` para clasificar
+   un identificador crudo del plugin a una categoría del catálogo.
+5. Una función `classify(...): Category | null` que consulta el map.
+6. Una función **idéntica en los 5 módulos** para elegir variante al
+   azar:
+
+   ```ts
+   function pickVariant<V>(variants: readonly V[]): V {
+     const idx = Math.floor(Math.random() * variants.length);
+     return variants[idx]!;
+   }
+   ```
+
+7. Una API pública `narrateX(input): string` que resuelve categoría
+   → variante → interpolación.
+8. Un export `_INTERNAL` con `{ VARIANTS, <MAP>_TO_CATEGORY, ... }`
+   para permitir tests estructurales.
+
+La forma varía sólo en los tipos de entrada (`death` acepta cause +
+mob + fallback vanilla; `pvp` acepta killer + victim + weapon; etc.)
+y en la lista concreta de categorías.
+
+**Objetivo futuro**
+
+Cuando aparezca un sexto catálogo (por ejemplo, `enchant-catalog`,
+`raid-catalog` o cualquier otro que se justifique en tickets
+posteriores), extraer la estructura común a un módulo utilitario en
+`bot/src/minecraft/` (nombre tentativo: `_catalog.ts` o
+`narrative-catalog.ts`). Alcance esperable del ticket futuro:
+
+- helper genérico `pickVariant<V>(variants): V` (una única fuente
+  de la aleatoriedad y del cast no-null);
+- helper `defineCatalog<Cat extends string, Input>({...})` que
+  reciba las variantes por categoría y la función de clasificación,
+  y devuelva `{ narrate, _INTERNAL }` tipados;
+- migrar los 5 catálogos existentes en un único commit, verificando
+  que todos los tests siguen pasando sin cambios de expectativas
+  (los tests deberían seguir usando la misma API pública
+  `narrateX()` y el mismo `_INTERNAL`);
+- añadir tests unitarios del helper genérico.
+
+**Motivación**
+
+- Fuente única para `pickVariant` (hoy: 5 copias idénticas byte-a-byte).
+- Firma consistente forzada por el helper: cualquier catálogo nuevo
+  se ajusta al mismo shape (mínimo N variantes por categoría,
+  lookup Map, fallback obligatorio).
+- Menos código boilerplate en cada catálogo nuevo — el autor sólo
+  aporta las variantes y las reglas de clasificación.
+- Reduce el riesgo de que un catálogo futuro se desvíe del patrón
+  (p. ej. usando `Math.random() * variants.length | 0` con distinto
+  comportamiento en edge cases).
+
+**Estado**
+
+Deferred. Con 5 catálogos el patrón ya es visible pero manejable;
+extraer ahora tocaría 5 módulos + 5 test files sin nuevo valor
+funcional. Se espera al sexto catálogo (o antes si aparece una
+razón operativa: bug en `pickVariant` que haya que arreglar en 5
+sitios, cambio de política de aleatoriedad, etc.).
+
+**Referencias**
+
+- Módulos afectados: `bot/src/minecraft/{death,dimension,server-milestone,boss,pvp}-catalog.ts`.
+- Tests afectados: `bot/test/{death,dimension,server-milestone,boss,pvp}-catalog.test.ts`.
+- Fuera de alcance: `advancement-catalog.ts` sigue un patrón distinto
+  (traducción directa ID → título, sin variantes narrativas).
