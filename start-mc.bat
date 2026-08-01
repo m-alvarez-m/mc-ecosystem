@@ -2,6 +2,9 @@
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
+REM Reservado para un futuro argumento --verbose. No altera la salida actual.
+set "MC_VERBOSE=0"
+
 REM ============================================================
 REM Modo de arranque: prod (default) o staging.
 REM   - Doble-click              -> prod (nacimiento del mundo real)
@@ -82,7 +85,14 @@ if errorlevel 1 (
 )
 
 REM ============================================================
-REM 2) Stack ya sano? Idempotencia.
+REM 2) Preflight Docker. Debe terminar ANTES de cualquier compose up.
+REM    Solo inspecciona: nunca detiene, borra ni repara recursos.
+REM ============================================================
+call :preflight
+if errorlevel 1 goto :err
+
+REM ============================================================
+REM 3) Stack ya sano? Idempotencia.
 REM    Requerimos running Y healthy: un contenedor 'exited' puede
 REM    mantener 'healthy' del ultimo check, no cuenta como sano.
 REM ============================================================
@@ -98,7 +108,7 @@ if "!MC_STATUS!"=="running" (
 )
 
 REM ============================================================
-REM 3) Arranque completo, orden del runbook:
+REM 4) Arranque completo, orden del runbook:
 REM    base (postgres, api, backup, playit) -> publish-pack-url.sh
 REM    (que levanta packserver + cloudflared -> verifica URL -> minecraft)
 REM ============================================================
@@ -139,7 +149,7 @@ if errorlevel 1 (
 )
 
 REM ============================================================
-REM 4) Espera activa: docker compose up devuelve cuando los
+REM 5) Espera activa: docker compose up devuelve cuando los
 REM    contenedores arrancan, NO cuando estan healthy. Sin esta
 REM    espera hay ventana ciega en la que el .bat dice "listo" pero
 REM    minecraft-prod aun esta cargando el mundo (~30-90s) y los
@@ -229,4 +239,174 @@ if not defined st_result (
 )
 if not defined st_result set "st_result=missing"
 if "!st_result!"=="%2" (set "%3=OK") else (set "%3=!st_result!")
+exit /b 0
+
+REM ============================================================
+REM Docker preflight: subrutinas pequenas e independientes.
+REM Los labels se consultan con templates Go y raw strings (backticks),
+REM compatibles con CMD sin depender de nombres de contenedor.
+REM ============================================================
+:preflight
+set "PF_START=!time: =0!"
+set "PF_ERROR=0"
+set "PF_PROJECT_STATE=OK"
+set "PF_PORTS=OK"
+set "PF_EXTERNAL_PROJECTS=ninguno"
+set "PF_ORPHAN_NETWORKS=0"
+set "PF_VOLUMES=OK"
+
+call :pf_project
+call :pf_ports
+call :pf_external
+call :pf_networks
+call :pf_volumes
+call :pf_summary
+
+if "!PF_ERROR!"=="1" exit /b 1
+exit /b 0
+
+:pf_project
+set "PF_INCOMPLETE_FOUND=0"
+for /f %%C in ('docker ps -aq --filter "label=com.docker.compose.project=mc-ecosystem" 2^>nul') do (
+    set "PF_STATE="
+    for /f %%S in ('docker inspect --format "{{.State.Status}}" %%C 2^>nul') do set "PF_STATE=%%S"
+    if /i "!PF_STATE!"=="created" call :pf_incomplete %%C
+    if /i "!PF_STATE!"=="restarting" call :pf_incomplete %%C
+    if /i "!PF_STATE!"=="dead" call :pf_incomplete %%C
+)
+if "!PF_INCOMPLETE_FOUND!"=="1" (
+    set "PF_PROJECT_STATE=ERROR"
+    set "PF_ERROR=1"
+    echo.
+    echo ERROR: existe un arranque anterior incompleto de mc-ecosystem.
+    echo Para limpiarlo manualmente, ejecuta:
+    echo   docker compose -p mc-ecosystem down
+)
+exit /b 0
+
+:pf_incomplete
+set "PF_INCOMPLETE_FOUND=1"
+call :pf_details %1
+echo.
+echo Contenedor incompleto detectado:
+echo   Contenedor: !PF_NAME!
+echo   Servicio:   !PF_SERVICE!
+echo   Imagen:     !PF_IMAGE!
+echo   Estado:     !PF_STATE!
+exit /b 0
+
+:pf_ports
+for %%P in (3000 5432 25565) do (
+    for /f %%C in ('docker ps -q --filter "publish=%%P" 2^>nul') do (
+        call :pf_details %%C
+        if /i not "!PF_PROJECT!"=="mc-ecosystem" call :pf_port_error %%P
+    )
+)
+exit /b 0
+
+:pf_port_error
+set "PF_PORTS=ERROR"
+set "PF_ERROR=1"
+if defined PF_PROJECT (
+    set "PF_EXTERNAL_PROJECTS=!PF_PROJECT!"
+    set "PF_REMEDIATION=docker compose -p !PF_PROJECT! down"
+) else (
+    set "PF_PROJECT=sin proyecto Compose"
+    set "PF_SERVICE=sin servicio Compose"
+    set "PF_REMEDIATION=docker stop !PF_NAME!"
+)
+echo.
+echo ERROR: puerto %1 ocupado por otro proyecto.
+echo   Puerto:      %1
+echo   Contenedor:  !PF_NAME!
+echo   Proyecto:    !PF_PROJECT!
+echo   Servicio:    !PF_SERVICE!
+echo   Estado:      !PF_STATE!
+echo   Imagen:      !PF_IMAGE!
+echo Para liberarlo manualmente, ejecuta:
+echo   !PF_REMEDIATION!
+exit /b 0
+
+:pf_external
+REM Recorre de nuevo los puertos criticos para que esta decision se base
+REM explicitamente en labels Compose, no en nombres de contenedor.
+for %%P in (3000 5432 25565) do (
+    for /f %%C in ('docker ps -q --filter "publish=%%P" 2^>nul') do (
+        call :pf_details %%C
+        if defined PF_PROJECT if /i not "!PF_PROJECT!"=="mc-ecosystem" set "PF_EXTERNAL_PROJECTS=!PF_PROJECT!"
+    )
+)
+if /i not "!PF_EXTERNAL_PROJECTS!"=="ninguno" set "PF_ERROR=1"
+exit /b 0
+
+:pf_networks
+for /f %%N in ('docker network ls -q --filter "label=com.docker.compose.project" 2^>nul') do (
+    set "PF_NETWORK_CONTAINERS="
+    for /f %%K in ('docker network inspect --format "{{len .Containers}}" %%N 2^>nul') do set "PF_NETWORK_CONTAINERS=%%K"
+    if "!PF_NETWORK_CONTAINERS!"=="0" call :pf_orphan %%N
+)
+exit /b 0
+
+:pf_orphan
+set /a PF_ORPHAN_NETWORKS+=1
+set "PF_NETWORK_NAME="
+set "PF_NETWORK_PROJECT="
+for /f %%V in ('docker network inspect --format "{{.Name}}" %1 2^>nul') do set "PF_NETWORK_NAME=%%V"
+for /f %%V in ('docker network inspect --format "{{index .Labels `com.docker.compose.project`}}" %1 2^>nul') do set "PF_NETWORK_PROJECT=%%V"
+echo WARNING: red Compose sin contenedores: !PF_NETWORK_NAME! ^(proyecto: !PF_NETWORK_PROJECT!^)
+exit /b 0
+
+:pf_volumes
+REM El stack usa bind mounts. No se modifica ni elimina ningun volumen.
+exit /b 0
+
+:pf_details
+set "PF_NAME="
+set "PF_PROJECT="
+set "PF_SERVICE="
+set "PF_STATE="
+set "PF_IMAGE="
+for /f %%V in ('docker inspect --format "{{.Name}}" %1 2^>nul') do set "PF_NAME=%%V"
+set "PF_NAME=!PF_NAME:/=!"
+for /f %%V in ('docker inspect --format "{{index .Config.Labels `com.docker.compose.project`}}" %1 2^>nul') do set "PF_PROJECT=%%V"
+for /f %%V in ('docker inspect --format "{{index .Config.Labels `com.docker.compose.service`}}" %1 2^>nul') do set "PF_SERVICE=%%V"
+for /f %%V in ('docker inspect --format "{{.State.Status}}" %1 2^>nul') do set "PF_STATE=%%V"
+for /f %%V in ('docker inspect --format "{{.Config.Image}}" %1 2^>nul') do set "PF_IMAGE=%%V"
+exit /b 0
+
+:pf_summary
+set "PF_END=!time: =0!"
+call :pf_elapsed
+echo.
+echo ====================================
+echo Docker Preflight
+echo ====================================
+echo Docker Desktop ............ OK
+echo Proyecto actual ........... mc-ecosystem
+echo Proyecto incompleto ....... !PF_PROJECT_STATE!
+echo Puertos criticos .......... !PF_PORTS!
+echo Otros proyectos ........... !PF_EXTERNAL_PROJECTS!
+if "!PF_ORPHAN_NETWORKS!"=="0" (
+    echo Redes huerfanas ........ ninguna
+) else (
+    echo Redes huerfanas ........ !PF_ORPHAN_NETWORKS! warning
+)
+echo Volumenes ................. !PF_VOLUMES!
+if "!PF_ERROR!"=="1" (
+    echo Resultado .............. ABORT
+) else (
+    echo Resultado .............. READY
+)
+echo Tiempo .................... !PF_SECONDS!.!PF_TENTHS! s
+echo ====================================
+echo.
+exit /b 0
+
+:pf_elapsed
+for /f "tokens=1-4 delims=:,." %%A in ("!PF_START!") do set /a PF_START_CS=(1%%A-100)*360000+(1%%B-100)*6000+(1%%C-100)*100+(1%%D-100)
+for /f "tokens=1-4 delims=:,." %%A in ("!PF_END!") do set /a PF_END_CS=(1%%A-100)*360000+(1%%B-100)*6000+(1%%C-100)*100+(1%%D-100)
+set /a PF_ELAPSED_CS=PF_END_CS-PF_START_CS
+if !PF_ELAPSED_CS! lss 0 set /a PF_ELAPSED_CS+=8640000
+set /a PF_SECONDS=PF_ELAPSED_CS/100
+set /a PF_TENTHS=(PF_ELAPSED_CS%%100)/10
 exit /b 0
