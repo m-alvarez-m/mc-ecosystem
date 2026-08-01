@@ -60,6 +60,47 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  bot:
+    build: ../bot
+    # Discord bot Pulso: consumidor read-only del Event Store, publica
+    # crónicas en Discord. Vive aquí junto al api porque ambos son
+    # servicios de aplicación TS que forman parte del stack productivo
+    # (se levantan via -f docker-compose.dev.yml -f docker-compose.prod.yml).
+    env_file:
+      # Fuente de verdad de los secretos y config del bot. Sigue el
+      # patrón "cada aplicación mantiene su propio .env"; el compose
+      # NO migra nada a infra/.env.
+      - ../bot/.env
+    environment:
+      # Overrides del contexto Docker. bot/.env tiene defaults locales
+      # (http://localhost:3000, ./data/cursor.json, PORT=3000) que no
+      # sirven dentro del compose: aquí resolvemos por nombre de servicio
+      # y por la ruta del volumen. No hay secretos aquí — sólo cableado
+      # de red y filesystem del contenedor.
+      API_BASE_URL: "http://api:3000"
+      CURSOR_FILE: "/app/data/cursor.json"
+      PORT: "3001"
+    volumes:
+      # Datos persistentes del bot (cursor y todo lo que venga en el
+      # futuro: cache, snapshots, wrapped, exports). Bind mount al
+      # patrón del proyecto (./pg-data, ./backup-repo, ./staging-data).
+      - ./bot-data:/app/data
+    depends_on:
+      # El bot arranca su polling contra el api en el primer tick; sin
+      # que el api esté healthy, la primera iteración fallaría.
+      api:
+        condition: service_healthy
+    healthcheck:
+      # Mismo mecanismo que el api (Node 24 trae fetch nativo). El bot
+      # reporta 200 cuando el cliente Discord está ready; 503 mientras
+      # se conecta. `interval: 10s` + `retries: 5` da ~50s de gracia
+      # para el login inicial (más que suficiente en la práctica).
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   postgres:
     image: postgres:16
     environment:

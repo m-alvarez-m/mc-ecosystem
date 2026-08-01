@@ -6,6 +6,8 @@ echo === MC Ecosystem: apagado ===
 echo.
 echo Se detendran los contenedores del stack ^(stop, NO down: los
 echo volumenes de datos se conservan intactos^).
+echo Incluye: postgres, api, backup, playit, packserver, cloudflared,
+echo          bot, minecraft.
 echo.
 echo Presiona ENTER para continuar, o Ctrl+C para cancelar.
 REM pause ^>nul: suprime "Press any key to continue . . ." propio de

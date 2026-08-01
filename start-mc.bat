@@ -102,8 +102,8 @@ REM 3) Arranque completo, orden del runbook:
 REM    base (postgres, api, backup, playit) -> publish-pack-url.sh
 REM    (que levanta packserver + cloudflared -> verifica URL -> minecraft)
 REM ============================================================
-echo Levantando servicios base ^(postgres, api, backup, playit^)...
-docker compose -f infra\docker-compose.dev.yml -f !MC_COMPOSE! -p mc-ecosystem up -d postgres api backup playit
+echo Levantando servicios base ^(postgres, api, backup, playit, bot^)...
+docker compose -f infra\docker-compose.dev.yml -f !MC_COMPOSE! -p mc-ecosystem up -d postgres api backup playit bot
 if errorlevel 1 (
     echo.
     echo ERROR: no se pudieron levantar los servicios base.
@@ -155,8 +155,9 @@ call :check_svc mc-ecosystem-postgres-1    healthy PG_ST
 call :check_svc mc-ecosystem-api-1         healthy API_ST
 call :check_svc mc-ecosystem-packserver-1  running PACK_ST
 call :check_svc mc-ecosystem-cloudflared-1 running CLOUD_ST
-echo   [!wait_elapsed!s]  mc:!MC_ST!  pg:!PG_ST!  api:!API_ST!  pack:!PACK_ST!  cloud:!CLOUD_ST!
-if "!MC_ST!"=="OK" if "!PG_ST!"=="OK" if "!API_ST!"=="OK" if "!PACK_ST!"=="OK" if "!CLOUD_ST!"=="OK" (
+call :check_svc mc-ecosystem-bot-1         healthy BOT_ST
+echo   [!wait_elapsed!s]  mc:!MC_ST!  pg:!PG_ST!  api:!API_ST!  pack:!PACK_ST!  cloud:!CLOUD_ST!  bot:!BOT_ST!
+if "!MC_ST!"=="OK" if "!PG_ST!"=="OK" if "!API_ST!"=="OK" if "!PACK_ST!"=="OK" if "!CLOUD_ST!"=="OK" if "!BOT_ST!"=="OK" (
     echo Todos los servicios listos tras !wait_elapsed!s.
     goto :show_state
 )
@@ -165,6 +166,13 @@ if !wait_elapsed! geq 120 (
     echo ERROR: timeout esperando servicios listos (^>120s).
     echo Estados finales arriba. Revisar logs:
     echo   docker compose -p mc-ecosystem logs --tail 100
+    if not "!BOT_ST!"=="OK" (
+        echo.
+        echo   x Discord Bot no alcanzo estado healthy.
+        echo     Ejecute:  docker compose -p mc-ecosystem logs bot
+        echo     para diagnosticar ^(token invalido, gateway Discord caido,
+        echo     api inalcanzable, permisos del canal, ...^).
+    )
     goto :err
 )
 timeout.exe /t 3 /nobreak >nul

@@ -15,3 +15,7 @@ pack.zip
 # Estado runtime del bot (cursor persistente del PollingEngine, ADR-010).
 # Se regenera en cada arranque; distinto por instancia; jamás se commite.
 bot/data/
+# Bind-mount del bot cuando corre en Docker (infra/bot-data/cursor.json + futuros
+# artefactos: cache, snapshots, wrapped, exports). Mismo criterio que pg-data,
+# backup-repo, staging-data: es estado del contenedor, no del código.
+bot-data/
