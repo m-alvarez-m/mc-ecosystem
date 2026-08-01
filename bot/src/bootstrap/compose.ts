@@ -26,6 +26,7 @@ import {
   BossKillHandler,
   PlayerKillHandler,
   CraftHandler,
+  VillagerTradeHandler,
 } from "../handlers";
 import type { Client } from "discord.js";
 
@@ -83,6 +84,7 @@ export function createHandlerRegistrations(config: Config): ReadonlyArray<{
     { eventType: "boss.kill", handler: new BossKillHandler() },
     { eventType: "player.kill", handler: new PlayerKillHandler() },
     { eventType: "item.craft", handler: new CraftHandler() },
+    { eventType: "villager.trade", handler: new VillagerTradeHandler() },
   ];
 }
 

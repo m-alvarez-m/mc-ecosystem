@@ -22,3 +22,4 @@ export {
   MissingVictimUuidError,
 } from "./player-kill-handler";
 export { CraftHandler } from "./craft-handler";
+export { VillagerTradeHandler } from "./villager-trade-handler";

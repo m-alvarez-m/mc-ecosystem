@@ -33,7 +33,8 @@ export type MessageKind =
   | "server_milestone"
   | "boss_kill"
   | "player_kill"
-  | "craft_milestone";
+  | "craft_milestone"
+  | "villager_trade";
 
 export interface PublishPayload {
   /**
@@ -51,7 +52,7 @@ export interface PublishPayload {
   /**
    * Etiqueta semantica opcional para presentacion. Ausente = el
    * publisher usa su default neutral (preserva compatibilidad hacia
-   * atras). Los 14 handlers de v1.1 la declaran siempre para que la
+   * atras). Los 15 handlers de v1.1 la declaran siempre para que la
    * capa de embeds pueda colorear consistentemente.
    */
   kind?: MessageKind;

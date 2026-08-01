@@ -32,3 +32,6 @@ export type { PvpKillInput } from "./pvp-catalog";
 
 export { narrateCraft } from "./craft-catalog";
 export type { CraftInput } from "./craft-catalog";
+
+export { narrateVillagerTrade } from "./villager-trade-catalog";
+export type { VillagerTradeInput } from "./villager-trade-catalog";

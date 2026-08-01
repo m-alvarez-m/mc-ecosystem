@@ -115,6 +115,7 @@ describe("DiscordPublisher", () => {
     ["boss_kill", KIND_COLORS.boss_kill],
     ["player_kill", KIND_COLORS.player_kill],
     ["craft_milestone", KIND_COLORS.craft_milestone],
+    ["villager_trade", KIND_COLORS.villager_trade],
   ] as const)("cada tipo usa el color esperado: %s", async (kind, expected) => {
     const channel = makeChannel();
     const client = makeFakeClient({ ready: true, channel });
