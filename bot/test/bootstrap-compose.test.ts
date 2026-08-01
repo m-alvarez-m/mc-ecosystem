@@ -24,6 +24,7 @@ import {
   TpsHandler,
   BackupHandler,
   DimensionHandler,
+  ServerMilestoneHandler,
 } from "../src/handlers";
 
 // Tests del bootstrap.
@@ -60,6 +61,7 @@ const EXPECTED_TYPES = [
   "server.tps_sample",
   "backup.done",
   "dimension.enter",
+  "milestone.first",
 ] as const;
 
 const EXPECTED_HANDLER_CTORS = [
@@ -73,12 +75,13 @@ const EXPECTED_HANDLER_CTORS = [
   TpsHandler,
   BackupHandler,
   DimensionHandler,
+  ServerMilestoneHandler,
 ];
 
 describe("createHandlerRegistrations", () => {
-  it("registra exactamente 10 handlers", () => {
+  it("registra exactamente 11 handlers", () => {
     const regs = createHandlerRegistrations(fakeConfig());
-    expect(regs).toHaveLength(10);
+    expect(regs).toHaveLength(11);
   });
 
   it("cubre los tipos de evento esperados y en el orden esperado", () => {
@@ -192,7 +195,7 @@ describe("composeApp", () => {
     expect(app.services.pollingEngine.isRunning()).toBe(false);
   });
 
-  it("dispatcher registrado con los 10 handlers: dispatch de tipos conocidos NO invoca onUnknown", async () => {
+  it("dispatcher registrado con los 11 handlers: dispatch de tipos conocidos NO invoca onUnknown", async () => {
     // Test integracion: verificamos que TODOS los tipos esperados
     // llegan a un handler registrado, usando el hook onUnknown como
     // deteccion de "gap" (handler no registrado -> onUnknown se llama).

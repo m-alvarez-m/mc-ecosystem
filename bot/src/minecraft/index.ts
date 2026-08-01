@@ -20,3 +20,6 @@ export type { DeathInput } from "./death-catalog";
 
 export { narrateDimension } from "./dimension-catalog";
 export type { DimensionChronicleInput } from "./dimension-catalog";
+
+export { narrateServerMilestone } from "./server-milestone-catalog";
+export type { ServerMilestoneInput } from "./server-milestone-catalog";

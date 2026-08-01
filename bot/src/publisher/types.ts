@@ -29,7 +29,8 @@ export type MessageKind =
   | "chat"
   | "tps_degraded"
   | "backup"
-  | "dimension_first_enter";
+  | "dimension_first_enter"
+  | "server_milestone";
 
 export interface PublishPayload {
   /**
@@ -47,7 +48,7 @@ export interface PublishPayload {
   /**
    * Etiqueta semantica opcional para presentacion. Ausente = el
    * publisher usa su default neutral (preserva compatibilidad hacia
-   * atras). Los 10 handlers de v1.1 la declaran siempre para que la
+   * atras). Los 11 handlers de v1.1 la declaran siempre para que la
    * capa de embeds pueda colorear consistentemente.
    */
   kind?: MessageKind;

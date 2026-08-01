@@ -48,6 +48,7 @@ export const KIND_COLORS: Readonly<Record<MessageKind, number>> = {
   tps_degraded: 0xf1c40f, // amarillo
   backup: 0x808080, // gris
   dimension_first_enter: 0x1abc9c, // turquesa (exploración / nuevo mundo)
+  server_milestone: 0xf39c12, // dorado (hito histórico del servidor)
 };
 
 /**
