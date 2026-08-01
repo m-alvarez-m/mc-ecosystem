@@ -25,3 +25,4 @@ export { CraftHandler } from "./craft-handler";
 export { VillagerTradeHandler } from "./villager-trade-handler";
 export { ProgressHandler } from "./progress-handler";
 export { TechnologyHandler } from "./technology-handler";
+export { ExplorationHandler } from "./exploration-handler";

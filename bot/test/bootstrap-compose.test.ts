@@ -31,6 +31,7 @@ import {
   VillagerTradeHandler,
   ProgressHandler,
   TechnologyHandler,
+  ExplorationHandler,
 } from "../src/handlers";
 
 // Tests del bootstrap.
@@ -74,6 +75,7 @@ const EXPECTED_TYPES = [
   "villager.trade",
   "item.enchant",
   "block.place",
+  "chunk.first_load",
 ] as const;
 
 const EXPECTED_HANDLER_CTORS = [
@@ -94,12 +96,13 @@ const EXPECTED_HANDLER_CTORS = [
   VillagerTradeHandler,
   ProgressHandler,
   TechnologyHandler,
+  ExplorationHandler,
 ];
 
 describe("createHandlerRegistrations", () => {
-  it("registra exactamente 17 handlers", () => {
+  it("registra exactamente 18 handlers", () => {
     const regs = createHandlerRegistrations(fakeConfig());
-    expect(regs).toHaveLength(17);
+    expect(regs).toHaveLength(18);
   });
 
   it("cubre los tipos de evento esperados y en el orden esperado", () => {
@@ -213,7 +216,7 @@ describe("composeApp", () => {
     expect(app.services.pollingEngine.isRunning()).toBe(false);
   });
 
-  it("dispatcher registrado con los 17 handlers: dispatch de tipos conocidos NO invoca onUnknown", async () => {
+  it("dispatcher registrado con los 18 handlers: dispatch de tipos conocidos NO invoca onUnknown", async () => {
     // Test integracion: verificamos que TODOS los tipos esperados
     // llegan a un handler registrado, usando el hook onUnknown como
     // deteccion de "gap" (handler no registrado -> onUnknown se llama).

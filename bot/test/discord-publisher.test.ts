@@ -118,6 +118,7 @@ describe("DiscordPublisher", () => {
     ["villager_trade", KIND_COLORS.villager_trade],
     ["progress", KIND_COLORS.progress],
     ["technology", KIND_COLORS.technology],
+    ["exploration", KIND_COLORS.exploration],
   ] as const)("cada tipo usa el color esperado: %s", async (kind, expected) => {
     const channel = makeChannel();
     const client = makeFakeClient({ ready: true, channel });

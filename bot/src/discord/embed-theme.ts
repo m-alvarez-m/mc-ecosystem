@@ -55,6 +55,7 @@ export const KIND_COLORS: Readonly<Record<MessageKind, number>> = {
   villager_trade: 0x27ae60, // verde esmeralda (comercio con aldeanos)
   progress: 0x8e44ad, // wisteria (evolución/encantamientos notables del servidor)
   technology: 0x34495e, // wet asphalt (tecnología/infraestructura del servidor)
+  exploration: 0x2980b9, // belize hole (horizonte / exploración del mundo)
 };
 
 /**

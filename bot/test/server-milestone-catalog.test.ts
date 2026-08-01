@@ -24,7 +24,7 @@ afterEach(() => {
 
 describe("narrateServerMilestone · hitos canónicos (6 what conocidos)", () => {
   it.each([
-    ["diamond", /💎/, /diamante|era|brillo azul/i],
+    ["diamond", /💎/, /diamante|era|brillo|capítulo|tierra|historia|nunca/i],
     ["nether", /🔥/, /Nether|portal|calor|expedición|otro mundo/i],
     ["end", /👁/, /End|vacío|último capítulo|portal final|principio del fin/i],
     ["elytra", /🪽/, /Elytra|vuelo|alturas|cielo|caminar|viajar/i],

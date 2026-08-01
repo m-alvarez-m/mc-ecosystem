@@ -41,3 +41,6 @@ export type { ProgressInput, EnchantEntry } from "./progress-catalog";
 
 export { narrateTechnology } from "./technology-catalog";
 export type { TechnologyInput } from "./technology-catalog";
+
+export { narrateExploration } from "./exploration-catalog";
+export type { ExplorationInput } from "./exploration-catalog";

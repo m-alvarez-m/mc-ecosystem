@@ -29,6 +29,7 @@ import {
   VillagerTradeHandler,
   ProgressHandler,
   TechnologyHandler,
+  ExplorationHandler,
 } from "../handlers";
 import type { Client } from "discord.js";
 
@@ -89,6 +90,7 @@ export function createHandlerRegistrations(config: Config): ReadonlyArray<{
     { eventType: "villager.trade", handler: new VillagerTradeHandler() },
     { eventType: "item.enchant", handler: new ProgressHandler() },
     { eventType: "block.place", handler: new TechnologyHandler() },
+    { eventType: "chunk.first_load", handler: new ExplorationHandler() },
   ];
 }
 
