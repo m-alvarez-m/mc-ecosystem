@@ -99,6 +99,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # PID 1 real (docker-init/tini): reap de hijos zombies + forward
+    # ordenado de SIGINT/SIGTERM a Node. Sin esto, `docker stop`
+    # espera los 10s por defecto y luego SIGKILL, cortando el logout
+    # de discord.js a mitad. Opción oficial del compose spec (v2+);
+    # sin instalar tini en la imagen ni cambiar el ENTRYPOINT.
+    init: true
+    # Rotación acotada de logs del contenedor (json-file driver por
+    # defecto de Docker Desktop). El bot produce ~1 línea/s de polling
+    # + picos cortos de handlers; con 10 MB × 5 archivos hay techo
+    # duro de ~50 MB por servicio en disco del host, evita crecimiento
+    # ilimitado en Windows sin logrotate del sistema.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     restart: unless-stopped
 
   postgres:
