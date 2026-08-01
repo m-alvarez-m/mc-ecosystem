@@ -23,6 +23,7 @@ import {
   BackupHandler,
   DimensionHandler,
   ServerMilestoneHandler,
+  BossKillHandler,
 } from "../handlers";
 import type { Client } from "discord.js";
 
@@ -77,6 +78,7 @@ export function createHandlerRegistrations(config: Config): ReadonlyArray<{
     { eventType: "backup.done", handler: new BackupHandler() },
     { eventType: "dimension.enter", handler: new DimensionHandler() },
     { eventType: "milestone.first", handler: new ServerMilestoneHandler() },
+    { eventType: "boss.kill", handler: new BossKillHandler() },
   ];
 }
 

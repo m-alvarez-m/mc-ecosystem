@@ -16,3 +16,4 @@ export {
   ServerMilestoneHandler,
   MissingMilestoneWhatError,
 } from "./server-milestone-handler";
+export { BossKillHandler, MissingBossError } from "./boss-kill-handler";

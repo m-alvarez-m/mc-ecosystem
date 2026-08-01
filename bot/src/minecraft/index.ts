@@ -23,3 +23,6 @@ export type { DimensionChronicleInput } from "./dimension-catalog";
 
 export { narrateServerMilestone } from "./server-milestone-catalog";
 export type { ServerMilestoneInput } from "./server-milestone-catalog";
+
+export { narrateBossKill } from "./boss-catalog";
+export type { BossKillInput } from "./boss-catalog";

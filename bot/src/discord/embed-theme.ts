@@ -49,6 +49,7 @@ export const KIND_COLORS: Readonly<Record<MessageKind, number>> = {
   backup: 0x808080, // gris
   dimension_first_enter: 0x1abc9c, // turquesa (exploración / nuevo mundo)
   server_milestone: 0xf39c12, // dorado (hito histórico del servidor)
+  boss_kill: 0xc0392b, // rojo profundo (batalla contra un boss)
 };
 
 /**
