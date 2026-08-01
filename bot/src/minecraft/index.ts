@@ -38,3 +38,6 @@ export type { VillagerTradeInput } from "./villager-trade-catalog";
 
 export { narrateProgress } from "./progress-catalog";
 export type { ProgressInput, EnchantEntry } from "./progress-catalog";
+
+export { narrateTechnology } from "./technology-catalog";
+export type { TechnologyInput } from "./technology-catalog";

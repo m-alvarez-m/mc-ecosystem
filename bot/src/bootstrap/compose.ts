@@ -28,6 +28,7 @@ import {
   CraftHandler,
   VillagerTradeHandler,
   ProgressHandler,
+  TechnologyHandler,
 } from "../handlers";
 import type { Client } from "discord.js";
 
@@ -87,6 +88,7 @@ export function createHandlerRegistrations(config: Config): ReadonlyArray<{
     { eventType: "item.craft", handler: new CraftHandler() },
     { eventType: "villager.trade", handler: new VillagerTradeHandler() },
     { eventType: "item.enchant", handler: new ProgressHandler() },
+    { eventType: "block.place", handler: new TechnologyHandler() },
   ];
 }
 

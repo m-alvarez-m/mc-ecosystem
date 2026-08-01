@@ -54,6 +54,7 @@ export const KIND_COLORS: Readonly<Record<MessageKind, number>> = {
   craft_milestone: 0xf1c40f, // oro brillante (hito de crafteo)
   villager_trade: 0x27ae60, // verde esmeralda (comercio con aldeanos)
   progress: 0x8e44ad, // wisteria (evolución/encantamientos notables del servidor)
+  technology: 0x34495e, // wet asphalt (tecnología/infraestructura del servidor)
 };
 
 /**

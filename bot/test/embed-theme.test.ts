@@ -28,6 +28,7 @@ const EXPECTED_KINDS: readonly MessageKind[] = [
   "craft_milestone",
   "villager_trade",
   "progress",
+  "technology",
 ];
 
 describe("embed-theme", () => {
@@ -35,7 +36,7 @@ describe("embed-theme", () => {
     expect(FOOTER_TEXT.trim().length).toBeGreaterThan(0);
   });
 
-  it("KIND_COLORS cubre exactamente los 16 kinds de MessageKind", () => {
+  it("KIND_COLORS cubre exactamente los 17 kinds de MessageKind", () => {
     const catalogKinds = Object.keys(KIND_COLORS).sort();
     const expected = [...EXPECTED_KINDS].sort();
     expect(catalogKinds).toEqual(expected);
@@ -79,5 +80,6 @@ describe("embed-theme", () => {
     expect(KIND_COLORS.craft_milestone).toBe(0xf1c40f); // oro brillante
     expect(KIND_COLORS.villager_trade).toBe(0x27ae60); // verde esmeralda
     expect(KIND_COLORS.progress).toBe(0x8e44ad); // wisteria (evolución)
+    expect(KIND_COLORS.technology).toBe(0x34495e); // wet asphalt (tecnología)
   });
 });
