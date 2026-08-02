@@ -1,10 +1,13 @@
 import { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
+import * as insights from "../insight/insights";
 import * as repo from "../insight/repository";
 import * as signals from "../insight/signals";
 import {
   activityQuerySchema,
   countQuerySchema,
+  insightIdParamsSchema,
+  insightsQuerySchema,
   patternsPlayersQuerySchema,
   patternsRangeQuerySchema,
   playerParamsSchema,
@@ -342,6 +345,52 @@ export async function insightRoutes(
         minActiveDays,
         idleThresholdDays,
       });
+    },
+  );
+
+  // -----------------------------------------------------------------
+  // I5 · Insight Engine (salida oficial de la fase Insight)
+  //
+  // 2 endpoints mínimos: lista y por-id. `id` desconocido → 404
+  // (no 400) — el schema sólo valida forma, la existencia se
+  // resuelve en el handler consultando el registry.
+  // -----------------------------------------------------------------
+
+  interface InsightsQuery {
+    from: string;
+    to: string;
+  }
+  interface InsightIdParams {
+    id: string;
+  }
+
+  app.get<{ Querystring: InsightsQuery }>(
+    "/insight/insights",
+    { schema: { querystring: insightsQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      return insights.listInsights(pool, { from: q.from, to: q.to });
+    },
+  );
+
+  app.get<{ Params: InsightIdParams; Querystring: InsightsQuery }>(
+    "/insight/insights/:id",
+    {
+      schema: {
+        params: insightIdParamsSchema,
+        querystring: insightsQuerySchema,
+      },
+    },
+    async (request, reply) => {
+      const q = request.query;
+      const insight = await insights.getInsight(pool, request.params.id, {
+        from: q.from,
+        to: q.to,
+      });
+      if (insight === null) {
+        return reply.code(404).send({ error: "insight_not_found" });
+      }
+      return insight;
     },
   );
 }

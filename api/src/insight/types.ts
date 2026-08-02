@@ -427,3 +427,144 @@ export interface PlayersSignal {
   readonly recurrent: RecurrentPlayersBlock;
   readonly idle: IdlePlayersBlock;
 }
+
+// -------------------------------------------------------------------
+// I5 · Insights (contrato uniforme)
+// -------------------------------------------------------------------
+//
+// Un Insight es la salida oficial de la fase Insight: dato estructurado
+// derivado por composición y clasificación de Signals. Contrato
+// idéntico para todos los insights — la única variación por tipo es
+// `facts` (shape específico) y `id`/`category` (fijos).
+//
+// Todos los campos son objetivos y reproducibles:
+//   - id: string estable que identifica al insight
+//   - category: agrupación semántica del insight
+//   - severity: clasificación determinística con thresholds explícitos
+//   - confidence: fiabilidad determinística basada en sample size y
+//     disponibilidad de baseline
+//   - generatedAt: momento de generación (para trazabilidad)
+//   - window: rango temporal analizado
+//   - facts: datos objetivos derivados
+//   - evidence: lista de signals consumidos (para auditoría/replay)
+//   - metadata: thresholds usados, versión del engine
+
+/** IDs conocidos por el Insight Engine hoy. */
+export type InsightId =
+  | "activity-trend"
+  | "exploration-trend"
+  | "economy-focus"
+  | "player-engagement";
+
+/** Categorías temáticas. Una por dimensión del ecosistema. */
+export type InsightCategory =
+  | "activity"
+  | "exploration"
+  | "economy"
+  | "players";
+
+/**
+ * Severidad: clasificación derivada por umbrales explícitos que
+ * viajan en `metadata.severityThresholds`. Sin heurísticas ocultas.
+ *
+ *   normal   = estado esperado, sin atención
+ *   low      = variación menor, notable pero no crítica
+ *   high     = variación significativa, requiere atención
+ *   critical = variación extrema
+ */
+export type Severity = "normal" | "low" | "high" | "critical";
+
+/**
+ * Confianza en el insight. Deriva de reglas determinísticas
+ * documentadas en `metadata.confidenceThresholds`.
+ *
+ *   high   = baseline disponible + sample grande
+ *   medium = baseline disponible + sample moderado
+ *   low    = sin baseline o sample muy pequeño
+ */
+export type Confidence = "low" | "medium" | "high";
+
+/** Ventana temporal analizada por el insight. */
+export interface InsightWindow {
+  readonly from: string;
+  readonly to: string;
+}
+
+/**
+ * Metadata auditable. Los thresholds concretos varían por insight
+ * pero siempre viajan en la respuesta para reproducibilidad y
+ * transparencia.
+ */
+export interface InsightMetadata {
+  readonly severityThresholds: Readonly<Record<string, number>>;
+  readonly confidenceThresholds: Readonly<{
+    readonly medium: number;
+    readonly high: number;
+  }>;
+  readonly engineVersion: string;
+}
+
+/**
+ * Contrato uniforme de un Insight. `Facts` es paramétrico — cada
+ * insight define su propio shape específico.
+ */
+export interface Insight<Facts = Readonly<Record<string, unknown>>> {
+  readonly id: InsightId;
+  readonly category: InsightCategory;
+  readonly severity: Severity;
+  readonly confidence: Confidence;
+  readonly generatedAt: string;
+  readonly window: InsightWindow;
+  readonly facts: Facts;
+  readonly evidence: readonly string[];
+  readonly metadata: InsightMetadata;
+}
+
+// -------------------------------------------------------------------
+// Facts por insight
+// -------------------------------------------------------------------
+
+/** Facts de `activity-trend`: derivado de activitySignal. */
+export interface ActivityTrendFacts {
+  readonly currentEvents: string;
+  readonly previousEvents: string;
+  readonly totalEventsAbsolute: string;
+  readonly totalEventsRatio: number | null;
+  readonly trend: Trend;
+  readonly coverageActiveDays: number;
+  readonly coverageTotalDays: number;
+  readonly coverageRatio: number;
+}
+
+/** Facts de `exploration-trend`: derivado de explorationSignal. */
+export interface ExplorationTrendFacts {
+  readonly currentChunks: string;
+  readonly previousChunks: string;
+  readonly chunksAbsolute: string;
+  readonly chunksRatio: number | null;
+  readonly trend: Trend;
+}
+
+/** Facts de `economy-focus`: derivado de economySignal. */
+export interface EconomyFocusFacts {
+  readonly totalEconomyEvents: string;
+  readonly dominant: EconomyDominantLabel | null;
+  /** Cuota del bucket dominante sobre total. `null` si total == 0. */
+  readonly dominantShare: number | null;
+  readonly trading: string;
+  readonly crafting: string;
+  readonly progression: string;
+}
+
+/** Facts de `player-engagement`: derivado de playersSignal. */
+export interface PlayerEngagementFacts {
+  readonly total: string;
+  readonly active: string;
+  readonly activeShare: number | null;
+  readonly newcomers: string;
+  readonly newcomersShare: number | null;
+  readonly returning: string;
+  readonly recurrent: string;
+  readonly idle: string;
+  readonly idleShare: number | null;
+}

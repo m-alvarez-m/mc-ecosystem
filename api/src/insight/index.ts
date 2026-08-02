@@ -6,6 +6,7 @@
 //
 // Sin efectos secundarios. Sólo re-exports.
 
+export * as insights from "./insights";
 export * as repository from "./repository";
 export * as schemas from "./schemas";
 export * as signals from "./signals";

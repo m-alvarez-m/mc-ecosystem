@@ -116,3 +116,32 @@ export const patternsPlayersQuerySchema = {
     idleThresholdDays: { type: "string", pattern: "^[1-9]\\d*$" },
   },
 } as const;
+
+// -------------------------------------------------------------------
+// I5 · Schemas de insights
+// -------------------------------------------------------------------
+
+/**
+ * /insight/insights y /insight/insights/:id comparten querystring
+ * (rango temporal obligatorio). El param `id` se valida sólo por
+ * formato mínimo; la existencia se resuelve en el handler
+ * (unknown → 404, no 400 — 404 comunica mejor "resource not found").
+ */
+export const insightsQuerySchema = {
+  type: "object",
+  required: ["from", "to"],
+  additionalProperties: false,
+  properties: {
+    from: { type: "string", format: "date-time" },
+    to: { type: "string", format: "date-time" },
+  },
+} as const;
+
+export const insightIdParamsSchema = {
+  type: "object",
+  required: ["id"],
+  additionalProperties: false,
+  properties: {
+    id: { type: "string", minLength: 1 },
+  },
+} as const;
