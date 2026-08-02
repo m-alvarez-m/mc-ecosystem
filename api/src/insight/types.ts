@@ -299,3 +299,131 @@ export interface StreakPatterns {
   readonly totalStreaks: number;
   readonly activeDaysCount: number;
 }
+
+// -------------------------------------------------------------------
+// I4 · Signals (composición de patrones)
+// -------------------------------------------------------------------
+//
+// Un Signal es una estructura derivada que agrega múltiples
+// consultas del repository en un único snapshot temático del
+// servidor. Sigue siendo dato estructurado — nunca texto narrativo,
+// nunca clasificaciones cualitativas ("bueno"/"malo"/"saludable").
+//
+// El único componente clasificatorio permitido es `trend`, con
+// valores determinísticos derivados de thresholds explícitos que
+// viajan en la propia respuesta (`trendThresholds`).
+
+/** Categoría de tendencia derivada por umbral explícito. */
+export type Trend = "up" | "flat" | "down" | "no_baseline";
+
+/** Umbrales explícitos usados por deriveTrend — devueltos en cada signal. */
+export interface TrendThresholds {
+  readonly up: number;
+  readonly down: number;
+}
+
+/**
+ * Ventana temporal contigua estándar. Reutilizada por todos los
+ * signals que exponen su rango.
+ */
+export interface SignalWindow {
+  readonly from: string;
+  readonly to: string;
+}
+
+/**
+ * Respuesta de GET /insight/signals/activity.
+ *
+ * Compone `growthPatterns` (I3) + `activityPatterns` (I3) en un
+ * único snapshot: actual vs. período previo + delta + cobertura
+ * del rango en días. `trend` se deriva del ratio de eventos totales.
+ */
+export interface ActivitySignal {
+  readonly window: SignalWindow;
+  readonly current: GrowthPeriod;
+  readonly previous: GrowthPeriod;
+  readonly delta: GrowthDelta;
+  readonly trend: Trend;
+  readonly trendThresholds: TrendThresholds;
+  readonly coverage: {
+    readonly activeDaysCount: number;
+    readonly totalDaysInRange: number;
+    readonly ratio: number;
+  };
+}
+
+/** Sub-bloque de un lado (actual/previo) de exploration. */
+export interface ExplorationSide {
+  readonly from: string;
+  readonly to: string;
+  readonly chunksExplored: string;
+}
+
+/**
+ * Respuesta de GET /insight/signals/exploration.
+ *
+ * Compone dos llamadas a `countEvents` (I1) filtradas por
+ * `chunk.first_load` — una para el período actual y otra para el
+ * previo. Trend derivado por ratio con los mismos umbrales que
+ * activity.
+ */
+export interface ExplorationSignal {
+  readonly current: ExplorationSide;
+  readonly previous: ExplorationSide;
+  readonly delta: {
+    readonly absolute: string;
+    readonly ratio: number | null;
+  };
+  readonly trend: Trend;
+  readonly trendThresholds: TrendThresholds;
+}
+
+/**
+ * Sub-bloque de una dimensión económica. Se guarda el `type`
+ * cru­do para que el consumidor pueda mapear al evento fuente.
+ */
+export interface EconomyDimension {
+  readonly type: string;
+  readonly totalEvents: string;
+}
+
+/** Etiqueta del bucket económico dominante. */
+export type EconomyDominantLabel = "trading" | "crafting" | "progression";
+
+/**
+ * Respuesta de GET /insight/signals/economy.
+ *
+ * Compone 3 llamadas paralelas a `countEvents` (I1) filtradas por
+ * `villager.trade`, `item.craft`, `item.enchant`. `dominant` es
+ * el bucket con mayor count; empate resuelto alfabéticamente
+ * (crafting < progression < trading). `null` cuando no hay eventos
+ * económicos en la ventana.
+ */
+export interface EconomySignal {
+  readonly window: SignalWindow;
+  readonly trading: EconomyDimension;
+  readonly crafting: EconomyDimension;
+  readonly progression: EconomyDimension;
+  readonly dominant: EconomyDominantLabel | null;
+  readonly totalEconomyEvents: string;
+}
+
+/**
+ * Respuesta de GET /insight/signals/players.
+ *
+ * Compone `playersSummary` (I1) + `playerPatterns` (I3). Los cuatro
+ * campos escalares (`total`, `active`, `newcomers`, `returning`)
+ * vienen de `players.last_seen`/`first_seen` — snapshot de la
+ * tabla players, no del stream de eventos. `recurrent` e `idle`
+ * vienen de los patterns I3 (recurrent es events-based, idle es
+ * players-table based con cutoff explícito).
+ */
+export interface PlayersSignal {
+  readonly window: SignalWindow;
+  readonly total: string;
+  readonly active: string;
+  readonly newcomers: string;
+  readonly returning: string;
+  readonly recurrent: RecurrentPlayersBlock;
+  readonly idle: IdlePlayersBlock;
+}

@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import * as repo from "../insight/repository";
+import * as signals from "../insight/signals";
 import {
   activityQuerySchema,
   countQuerySchema,
@@ -284,6 +285,63 @@ export async function insightRoutes(
     async (request) => {
       const q = request.query;
       return repo.streakPatterns(pool, { from: q.from, to: q.to });
+    },
+  );
+
+  // -----------------------------------------------------------------
+  // I4 · Signals (composición de patrones)
+  //
+  // Los handlers reutilizan los mismos esquemas AJV de I3
+  // (patternsRangeQuerySchema, patternsPlayersQuerySchema) porque
+  // las entradas son idénticas — from/to y opcionalmente los
+  // umbrales para players. Los signals viven en `insight/signals.ts`;
+  // el router sólo cablea.
+  // -----------------------------------------------------------------
+
+  app.get<{ Querystring: PatternsRangeQuery }>(
+    "/insight/signals/activity",
+    { schema: { querystring: patternsRangeQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      return signals.activitySignal(pool, { from: q.from, to: q.to });
+    },
+  );
+
+  app.get<{ Querystring: PatternsRangeQuery }>(
+    "/insight/signals/exploration",
+    { schema: { querystring: patternsRangeQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      return signals.explorationSignal(pool, { from: q.from, to: q.to });
+    },
+  );
+
+  app.get<{ Querystring: PatternsRangeQuery }>(
+    "/insight/signals/economy",
+    { schema: { querystring: patternsRangeQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      return signals.economySignal(pool, { from: q.from, to: q.to });
+    },
+  );
+
+  app.get<{ Querystring: PatternsPlayersQuery }>(
+    "/insight/signals/players",
+    { schema: { querystring: patternsPlayersQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      const minActiveDays = q.minActiveDays
+        ? parseInt(q.minActiveDays, 10)
+        : undefined;
+      const idleThresholdDays = q.idleThresholdDays
+        ? parseInt(q.idleThresholdDays, 10)
+        : undefined;
+      return signals.playersSignal(pool, {
+        from: q.from,
+        to: q.to,
+        minActiveDays,
+        idleThresholdDays,
+      });
     },
   );
 }

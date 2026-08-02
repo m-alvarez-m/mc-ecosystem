@@ -8,6 +8,7 @@
 
 export * as repository from "./repository";
 export * as schemas from "./schemas";
+export * as signals from "./signals";
 export type {
   EventCount,
   PlayerEventReference,
