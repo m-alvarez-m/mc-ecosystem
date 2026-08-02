@@ -2,6 +2,7 @@ import Fastify, { FastifyServerOptions } from "fastify";
 import addFormats from "ajv-formats";
 import { eventRoutes } from "./routes/events";
 import { playerRoutes } from "./routes/players";
+import { insightRoutes } from "./routes/insight";
 import { pool } from "./db";
 
 // ajv-formats habilita los formatos "uuid" y "date-time" del esquema.
@@ -28,6 +29,7 @@ app.get("/pack.zip", async (_request, reply) => {
 
 app.register(eventRoutes, { pool });
 app.register(playerRoutes, { pool });
+app.register(insightRoutes, { pool });
 
 app.listen({ port: 3000, host: "0.0.0.0" }).catch((err) => {
   app.log.error(err);
