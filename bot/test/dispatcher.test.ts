@@ -42,7 +42,14 @@ function fakePublisher(): Publisher & { publish: ReturnType<typeof vi.fn> } {
 }
 
 function fakeContext(publisher?: Publisher): DispatchContext {
-  return { publisher: publisher ?? fakePublisher() };
+  return {
+    publisher: publisher ?? fakePublisher(),
+    playerNameResolver: {
+      resolve: async () => "TestName",
+    } as unknown as import("../src/players").PlayerNameResolver,
+    logger: { warn: () => undefined },
+    freshnessThresholdMs: 120000,
+  };
 }
 
 /**
@@ -129,7 +136,14 @@ describe("EventDispatcher", () => {
 
   it("Publisher se puede reemplazar por un fake sin tocar handlers", async () => {
     const publisher = fakePublisher();
-    const customContext: DispatchContext = { publisher };
+    const customContext: DispatchContext = {
+      publisher,
+      playerNameResolver: {
+        resolve: async () => "TestName",
+      } as unknown as import("../src/players").PlayerNameResolver,
+      logger: { warn: () => undefined },
+      freshnessThresholdMs: 120000,
+    };
     const d = new EventDispatcher({ context: customContext });
 
     d.register(

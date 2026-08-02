@@ -50,6 +50,7 @@ function fakeConfig(): Config {
     cursor: { filePath: "/tmp/pulso/cursor.json" },
     polling: { intervalMs: 5_000 },
     tps: { alertThreshold: 18 },
+    freshness: { thresholdMs: 120_000 },
   };
 }
 
@@ -231,6 +232,8 @@ describe("composeApp", () => {
       playerNameResolver: {
         resolve: async () => "TestName",
       } as unknown as PlayerNameResolver,
+      logger: { warn: () => undefined },
+      freshnessThresholdMs: 120000,
     };
     const dispatcher = new EventDispatcher({
       context,
@@ -274,6 +277,8 @@ describe("composeApp", () => {
       playerNameResolver: {
         resolve: async () => "TestName",
       } as unknown as PlayerNameResolver,
+      logger: { warn: () => undefined },
+      freshnessThresholdMs: 120000,
     };
     const dispatcher = new EventDispatcher({
       context,

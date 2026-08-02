@@ -28,7 +28,7 @@ function fakeContext(
   publisher: Publisher,
   resolver: PlayerNameResolver = noCallResolver(),
 ): DispatchContext {
-  return { publisher, playerNameResolver: resolver };
+  return { publisher, playerNameResolver: resolver, logger: { warn: () => undefined }, freshnessThresholdMs: 120000 };
 }
 
 const ENCHANTER = "71804e99-f2aa-32dc-bfcb-0ea5cfdda708";

@@ -288,9 +288,33 @@ ORDER BY r.ts DESC;
 Si aparecen "requests huérfanas" recurrentes, el evento `tp.completed`
 no cubre todos los caminos — revisar el listener.
 
+## Handler del bot Pulso (opcional)
+
+Añadir el evento al catálogo no obliga a que Pulso lo anuncie en
+Discord. Los que sí se anuncian tienen un `EventHandler` en
+`bot/src/handlers/` registrado en `bootstrap/compose.ts`. Antes de
+escribir uno nuevo, decidir de qué **tipo** es el handler:
+
+- **Historia**: describe un hecho pasado fechado. El mensaje sigue
+  siendo cierto aunque llegue tarde (ej. "X consiguió Y"). No
+  necesita validar frescura.
+- **Estado**: anuncia una transición como si ocurriera ahora (ej.
+  "X se ha unido", "Servidor iniciado"). **Requiere validar
+  frescura antes de publicar** — importar `isFreshEvent` de
+  `bot/src/handlers/freshness.ts` y consumir `context.logger` +
+  `context.freshnessThresholdMs`. Ver la sección "Handlers de
+  estado vs handlers históricos" en `docs/pulso-bot-design.md`
+  para el contrato completo (BUG-02A / BUG-02B).
+
+Regla rápida: si el evento puede llegar tarde por el `storeDurable`
+del plugin **y** su mensaje afirma algo sobre el presente, es de
+estado.
+
 ## Referencias
 
 - `docs/event-catalog.md` — catálogo canónico. Fuente de verdad.
+- `docs/pulso-bot-design.md` — "Handlers de estado vs handlers
+  históricos" (contrato de freshness).
 - `docs/runbook.md` — sección "Despliegue inicial de EventCollector en
   prod" para el patrón end-to-end de deploy + verificación humana.
 - `plugin/src/main/java/com/mcecosystem/eventcollector/` — listeners

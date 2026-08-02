@@ -35,8 +35,14 @@ function fakeResolverFromMap(
 function fakeContext(
   publisher: Publisher,
   resolver: PlayerNameResolver,
+  overrides?: { warn?: (obj: unknown, msg?: string) => void; freshnessThresholdMs?: number },
 ): DispatchContext {
-  return { publisher, playerNameResolver: resolver };
+  return {
+    publisher,
+    playerNameResolver: resolver,
+    logger: { warn: overrides?.warn ?? (() => undefined) },
+    freshnessThresholdMs: overrides?.freshnessThresholdMs ?? 120000,
+  };
 }
 
 const VANCORBUS = "71804e99-f2aa-32dc-bfcb-0ea5cfdda708";
@@ -197,6 +203,58 @@ describe("PlayerJoinedHandler", () => {
     await expect(
       h.handle(fakeContext(publisher, resolver), playerJoinEvent()),
     ).rejects.toBe(boom);
+  });
+
+  // ---------- freshness (BUG-02B) ----------
+
+  it("session.start fresco: publica normalmente", async () => {
+    const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
+    const h = new PlayerJoinedHandler();
+    const event: EventRecord = {
+      ...playerJoinEvent(),
+      ts: "2026-08-02T07:00:00.000Z",
+      received_at: "2026-08-02T07:00:00.500Z",
+    };
+    await h.handle(fakeContext(publisher, resolver), event);
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it("session.start obsoleto: NO publica, WARN emitido, resolver NO llamado", async () => {
+    const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
+    const warn = vi.fn();
+    const h = new PlayerJoinedHandler();
+    const event: EventRecord = {
+      ...playerJoinEvent(),
+      ts: "2026-08-01T07:00:00.000Z",
+      received_at: "2026-08-02T07:00:00.000Z", // 24h de lag
+    };
+    await h.handle(fakeContext(publisher, resolver, { warn }), event);
+    expect(publisher.publish).not.toHaveBeenCalled();
+    // Freshness va ANTES del resolver: no gastar RTT resolviendo lo
+    // que no vamos a publicar.
+    expect((resolver as unknown as { resolve: ReturnType<typeof vi.fn> }).resolve)
+      .not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    const p = warn.mock.calls[0]![0] as Record<string, unknown>;
+    expect(p.handler).toBe("PlayerJoinedHandler");
+    expect(p.motivo).toBe("evento_obsoleto");
+    expect(p.type).toBe("session.start");
+  });
+
+  it("evento obsoleto: NO lanza excepcion (cursor avanza)", async () => {
+    const publisher = fakePublisher();
+    const resolver = fakeResolverFromMap({ [VANCORBUS]: "Vancorbus" });
+    const h = new PlayerJoinedHandler();
+    const event: EventRecord = {
+      ...playerJoinEvent(),
+      ts: "2026-08-01T00:00:00.000Z",
+      received_at: "2026-08-02T00:00:00.000Z",
+    };
+    await expect(
+      h.handle(fakeContext(publisher, resolver), event),
+    ).resolves.toBeUndefined();
   });
 
   it("funciona con cualquier Publisher fake (no depende de Discord)", async () => {

@@ -1,6 +1,7 @@
 import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
+import { computeLagMs, isFreshEvent } from "./freshness";
 
 // TpsHandler: emite alerta cuando el TPS del servidor baja del umbral
 // configurado (T2 del backlog v1.1).
@@ -10,6 +11,12 @@ import type { EventRecord } from "../eventstore";
 // publica sólo cuando hay que enterarse — TPS estrictamente por
 // debajo del umbral se traduce en un mensaje que comunica
 // degradación clara.
+//
+// Handler de ESTADO (BUG-02A §3): una alerta de degradacion tiene
+// sentido AHORA, no de ayer. Los server.tps_sample tambien pasan por
+// buffer del plugin (24 casos delayed observados en la DB); si un
+// muestreo antiguo indicaba TPS 5 pero llegan 30 min tarde, publicar
+// "Servidor lento" es mentir. Se descarta silenciosamente.
 //
 // La decisión vive AQUI, dentro del handler. Sin middleware, sin
 // filtro en el dispatcher, sin lógica en el polling. Otros handlers
@@ -57,6 +64,23 @@ export class TpsHandler implements EventHandler {
   }
 
   async handle(context: DispatchContext, event: EventRecord): Promise<void> {
+    if (!isFreshEvent(event, context.freshnessThresholdMs)) {
+      context.logger.warn(
+        {
+          event_uuid: event.event_uuid,
+          id: event.id,
+          type: event.type,
+          handler: "TpsHandler",
+          ts: event.ts,
+          received_at: event.received_at,
+          lag_ms: computeLagMs(event),
+          threshold_ms: context.freshnessThresholdMs,
+          motivo: "evento_obsoleto",
+        },
+        "Evento de estado obsoleto descartado: no se publica en Discord",
+      );
+      return;
+    }
     const tps = extractTps(event);
     if (tps >= this.alertThreshold) {
       // Sample sano: silencio absoluto. No publish, no log, no error.

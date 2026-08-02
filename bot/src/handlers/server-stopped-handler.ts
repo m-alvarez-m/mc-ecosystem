@@ -1,6 +1,7 @@
 import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
+import { computeLagMs, isFreshEvent } from "./freshness";
 
 // ServerStoppedHandler: gemelo de ServerStartedHandler.
 //
@@ -9,9 +10,11 @@ import type { EventRecord } from "../eventstore";
 // Minecraft se apaga ordenadamente (via stop-mc.bat / docker stop /
 // EventCollector.onDisable).
 //
-// El handler solo depende de context.publisher (interfaz Publisher).
-// No conoce Discord, no conoce Minecraft, no conoce dispatcher ni
-// polling engine.
+// Handler de ESTADO (BUG-02A §3): el escenario reportado en BUG-02
+// era exactamente este handler publicando "Servidor detenido" con el
+// servidor arriba porque el plugin `storeDurable` reentrego un
+// server.stop de la sesion anterior. Descarta obsoletos silenciosamente
+// para bloquear ese modo de fallo.
 
 const EVENT_TYPE = "server.stop";
 
@@ -25,8 +28,24 @@ export class ServerStoppedHandler implements EventHandler {
     return eventType === EVENT_TYPE;
   }
 
-  async handle(context: DispatchContext, _event: EventRecord): Promise<void> {
-    // `_event` disponible por contrato; v1 no consume nada del payload.
+  async handle(context: DispatchContext, event: EventRecord): Promise<void> {
+    if (!isFreshEvent(event, context.freshnessThresholdMs)) {
+      context.logger.warn(
+        {
+          event_uuid: event.event_uuid,
+          id: event.id,
+          type: event.type,
+          handler: "ServerStoppedHandler",
+          ts: event.ts,
+          received_at: event.received_at,
+          lag_ms: computeLagMs(event),
+          threshold_ms: context.freshnessThresholdMs,
+          motivo: "evento_obsoleto",
+        },
+        "Evento de estado obsoleto descartado: no se publica en Discord",
+      );
+      return;
+    }
     await context.publisher.publish({
       title: TITLE,
       body: BODY,

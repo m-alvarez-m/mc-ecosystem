@@ -542,6 +542,79 @@ Estos principios se citarán desde los ADRs correspondientes cuando
 lleguen (Decisión 10). Cambios a estos principios son cambios
 arquitectónicos globales — requieren ADR propio.
 
+## Handlers de estado vs handlers históricos
+
+Distinción arquitectónica dentro de los consumidores editoriales
+(Pulso, futuros bots narrativos). Fija cuándo aplicar el **contrato
+de freshness** (BUG-02A / BUG-02B).
+
+**Handlers HISTÓRICOS** — su publicación describe un hecho pasado
+fechado; el mensaje sigue siendo cierto aunque llegue tarde.
+Publican en tiempo verbal pasado no comprometido con el ahora
+("consiguió", "descubrió", "mató a"). No requieren freshness. La
+inmensa mayoría de los handlers son de este tipo: advancement,
+death, kill, boss, exploration, dimension, craft, enchant,
+technology, villager, milestone, chat, backup.
+
+**Handlers de ESTADO** — su publicación anuncia una transición
+como si estuviera ocurriendo ahora. Usan presente o pretérito
+perfecto compuesto ("iniciado", "detenido", "se ha unido", "ha
+salido", "está lento"). Si un evento antiguo llega por buffer
+(`storeDurable` del plugin, retry HTTP tras hiccup), publicarlo
+como transición actual sería mentir. **Deben validar frescura
+antes de publicar.**
+
+Los handlers de estado actuales son cinco:
+
+| Handler | Evento | Motivo |
+|---|---|---|
+| `ServerStartedHandler` | `server.start` | Anuncia "servidor arriba ahora" |
+| `ServerStoppedHandler` | `server.stop` | Anuncia "servidor caído ahora" (BUG-02 original) |
+| `TpsHandler` | `server.tps_sample` | Alerta "servidor lento ahora" |
+| `PlayerJoinedHandler` | `session.start` | Afirma "X está conectado ahora" |
+| `PlayerLeftHandler` | `session.end` | Afirma "X ya no está ahora" |
+
+**Regla para nuevos handlers**: antes de implementar, responder
+tres preguntas — (1) ¿representa historia?, (2) ¿representa estado
+actual?, (3) ¿el evento puede llegar tarde por buffer del plugin?
+Si (2) y (3) son "sí", es un handler de estado y debe validar
+frescura.
+
+**Contrato de freshness**:
+
+- `received_at - ts <= FRESHNESS_THRESHOLD_MS` → publicar.
+- `received_at - ts > FRESHNESS_THRESHOLD_MS` → NO publicar,
+  emitir WARN estructurado (con `event_uuid`, `id`, `type`,
+  `handler`, `ts`, `received_at`, `lag_ms`, `threshold_ms`,
+  `motivo`), y devolver normalmente (el cursor avanza; el
+  evento sigue en el Event Store como fuente de verdad).
+- Timestamps mal formados → fail-open (tratar como fresco). La
+  validación de schema vive en el `EventStoreClient`; el helper
+  no re-litiga contrato.
+
+**Umbral por defecto**: 120 000 ms (2 min). Configurable por
+`FRESHNESS_THRESHOLD_MS`. Fundamentación cuantitativa en BUG-02A
+§7 — cubre el ciclo `RETRY_PERIOD_TICKS` del plugin (30 s) con 4×
+de margen y captura todos los casos obsoletos observados en el
+Event Store (lag ≥ 6 min).
+
+**Implementación**: helper puro en `bot/src/handlers/freshness.ts`
+(`isFreshEvent(event, thresholdMs)`, `computeLagMs(event)`). Los
+handlers importan el helper y consumen `logger` y
+`freshnessThresholdMs` de `DispatchContext`. No hay estado
+persistente, no hay máquina de estados, no hay uso de `Date.now()`
+— sólo aritmética sobre dos campos del propio `EventRecord`.
+
+**Qué NO es freshness**:
+
+- No es filtrar tipos de evento (eso lo hace la api con `types=`).
+- No es deduplicación (eso lo hace `event_uuid` a nivel Event Store).
+- No es control de estado (eso sería una máquina de estados
+  aparte, descartada explícitamente en BUG-02A §6 por overkill).
+- No es un cutoff temporal absoluto (no bloquea replays deliberados
+  desde el inicio del mundo — un consumer analítico como Insight
+  no aplica freshness, sólo los consumers editoriales).
+
 ## Preguntas abiertas para el dueño
 
 Cosas que necesitan tu decisión antes de codificar:

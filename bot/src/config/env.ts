@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { DEFAULT_FRESHNESS_THRESHOLD_MS } from "../handlers/freshness";
 
 // Configuracion del bot Pulso (v1.1).
 //
@@ -35,6 +36,16 @@ export interface Config {
      */
     alertThreshold: number;
   };
+  freshness: {
+    /**
+     * Umbral (ms) para clasificar un evento como fresco vs obsoleto en
+     * handlers de estado (server.start/stop, session.start/end,
+     * server.tps_sample). `received_at - ts > thresholdMs` → descartar
+     * en el handler + WARN. No afecta al Event Store ni a otros
+     * handlers historicos. Default: 120000 ms (2 min). Ver BUG-02A §7.
+     */
+    thresholdMs: number;
+  };
 }
 
 interface RequiredVar {
@@ -61,6 +72,12 @@ const DEFAULT_HTTP_TIMEOUT_MS = 10_000;
 // se considera degradacion y TpsHandler emite alerta. Aceptamos
 // decimales para umbrales finos (17.5, 15.8, etc.).
 const DEFAULT_TPS_ALERT_THRESHOLD = 18;
+
+// Default 120s (2 min) — cubre el ciclo de reintento del plugin (30s)
+// con 4× de margen y captura todos los casos obsoletos observados en
+// el Event Store (>= 6min). Ver BUG-02A §7 para el razonamiento
+// cuantitativo. Constante importada del helper: una sola fuente de
+// verdad numerica.
 
 export function loadConfig(): Config {
   const missing: string[] = [];
@@ -122,6 +139,18 @@ export function loadConfig(): Config {
     tpsAlertThreshold = parsed;
   }
 
+  const rawFreshness = process.env.FRESHNESS_THRESHOLD_MS;
+  let freshnessThresholdMs = DEFAULT_FRESHNESS_THRESHOLD_MS;
+  if (rawFreshness !== undefined && rawFreshness.trim().length > 0) {
+    const parsed = Number(rawFreshness);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new Error(
+        `FRESHNESS_THRESHOLD_MS invalido: "${rawFreshness}" (debe ser entero positivo, en ms)`,
+      );
+    }
+    freshnessThresholdMs = parsed;
+  }
+
   return {
     discord: {
       token: process.env.DISCORD_BOT_TOKEN!,
@@ -133,5 +162,6 @@ export function loadConfig(): Config {
     cursor: { filePath: process.env.CURSOR_FILE! },
     polling: { intervalMs: pollIntervalMs },
     tps: { alertThreshold: tpsAlertThreshold },
+    freshness: { thresholdMs: freshnessThresholdMs },
   };
 }

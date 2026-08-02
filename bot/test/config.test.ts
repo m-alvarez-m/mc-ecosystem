@@ -15,6 +15,7 @@ const ALL_VARS = [
   "CURSOR_FILE",
   "POLL_INTERVAL_MS",
   "TPS_ALERT_THRESHOLD",
+  "FRESHNESS_THRESHOLD_MS",
 ] as const;
 
 function setBaseValid(): void {
@@ -56,6 +57,8 @@ describe("loadConfig", () => {
     expect(config.polling.intervalMs).toBe(5000);
     // TPS_ALERT_THRESHOLD ausente -> default 18.
     expect(config.tps.alertThreshold).toBe(18);
+    // FRESHNESS_THRESHOLD_MS ausente -> default 120000 (2 min, BUG-02A §7).
+    expect(config.freshness.thresholdMs).toBe(120_000);
   });
 
   it("acepta HTTP_TIMEOUT_MS custom cuando es entero positivo", () => {
@@ -145,5 +148,33 @@ describe("loadConfig", () => {
 
     process.env.TPS_ALERT_THRESHOLD = "-5";
     expect(() => loadConfig()).toThrow(/TPS_ALERT_THRESHOLD invalido/);
+  });
+
+  it("acepta FRESHNESS_THRESHOLD_MS custom (entero positivo)", () => {
+    setBaseValid();
+    process.env.FRESHNESS_THRESHOLD_MS = "60000";
+    const config = loadConfig();
+    expect(config.freshness.thresholdMs).toBe(60_000);
+  });
+
+  it("aborta cuando FRESHNESS_THRESHOLD_MS no es entero positivo", () => {
+    setBaseValid();
+    process.env.FRESHNESS_THRESHOLD_MS = "no-es-numero";
+    expect(() => loadConfig()).toThrow(/FRESHNESS_THRESHOLD_MS invalido/);
+  });
+
+  it("aborta cuando FRESHNESS_THRESHOLD_MS es cero o negativo", () => {
+    setBaseValid();
+    process.env.FRESHNESS_THRESHOLD_MS = "0";
+    expect(() => loadConfig()).toThrow(/FRESHNESS_THRESHOLD_MS invalido/);
+
+    process.env.FRESHNESS_THRESHOLD_MS = "-1";
+    expect(() => loadConfig()).toThrow(/FRESHNESS_THRESHOLD_MS invalido/);
+  });
+
+  it("aborta cuando FRESHNESS_THRESHOLD_MS es decimal (debe ser entero)", () => {
+    setBaseValid();
+    process.env.FRESHNESS_THRESHOLD_MS = "120.5";
+    expect(() => loadConfig()).toThrow(/FRESHNESS_THRESHOLD_MS invalido/);
   });
 });

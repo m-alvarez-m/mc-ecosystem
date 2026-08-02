@@ -1,6 +1,7 @@
 import type { EventHandler } from "../dispatcher";
 import type { DispatchContext } from "../context";
 import type { EventRecord } from "../eventstore";
+import { computeLagMs, isFreshEvent } from "./freshness";
 
 // ServerStartedHandler: primer EventHandler real de Pulso.
 //
@@ -8,10 +9,15 @@ import type { EventRecord } from "../eventstore";
 // (docs/event-catalog.md) el tipo del evento es `server.start`; en el
 // roadmap de Pulso este handler cubre el concepto SERVER_STARTED.
 //
-// El handler SOLO depende de context.publisher (interfaz Publisher).
+// Handler de ESTADO (BUG-02A §3): descarta silenciosamente eventos
+// obsoletos (`received_at - ts > context.freshnessThresholdMs`) para
+// no anunciar un arranque que ocurrio hace horas. El evento sigue en
+// el Event Store; el cursor avanza igual.
+//
+// El handler SOLO depende de context.publisher (interfaz Publisher) y,
+// para la validacion de frescura, de context.logger + freshnessThresholdMs.
 // No conoce Discord, no conoce Minecraft, no conoce el Dispatcher ni
-// el Polling Engine. Es intercambiable, testeable, y sustituible por
-// otra implementacion sin tocar el resto del bot.
+// el Polling Engine.
 
 const EVENT_TYPE = "server.start";
 
@@ -26,11 +32,24 @@ export class ServerStartedHandler implements EventHandler {
     return eventType === EVENT_TYPE;
   }
 
-  async handle(context: DispatchContext, _event: EventRecord): Promise<void> {
-    // `_event` esta disponible por contrato del EventHandler; este
-    // handler no consume nada del payload por ahora. Cuando llegue el
-    // caso (mostrar version, uptime del arranque previo, etc.), se
-    // documenta el nuevo uso aqui.
+  async handle(context: DispatchContext, event: EventRecord): Promise<void> {
+    if (!isFreshEvent(event, context.freshnessThresholdMs)) {
+      context.logger.warn(
+        {
+          event_uuid: event.event_uuid,
+          id: event.id,
+          type: event.type,
+          handler: "ServerStartedHandler",
+          ts: event.ts,
+          received_at: event.received_at,
+          lag_ms: computeLagMs(event),
+          threshold_ms: context.freshnessThresholdMs,
+          motivo: "evento_obsoleto",
+        },
+        "Evento de estado obsoleto descartado: no se publica en Discord",
+      );
+      return;
+    }
     await context.publisher.publish({
       title: TITLE,
       body: BODY,

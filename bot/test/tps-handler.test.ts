@@ -20,8 +20,16 @@ const NEVER_CALLED_RESOLVER = {
   }),
 } as unknown as import("../src/players").PlayerNameResolver;
 
-function fakeContext(publisher: Publisher): DispatchContext {
-  return { publisher, playerNameResolver: NEVER_CALLED_RESOLVER };
+function fakeContext(
+  publisher: Publisher,
+  overrides?: { warn?: (obj: unknown, msg?: string) => void; freshnessThresholdMs?: number },
+): DispatchContext {
+  return {
+    publisher,
+    playerNameResolver: NEVER_CALLED_RESOLVER,
+    logger: { warn: overrides?.warn ?? (() => undefined) },
+    freshnessThresholdMs: overrides?.freshnessThresholdMs ?? 120000,
+  };
 }
 
 function tpsEvent(data: Record<string, unknown>, uuid = "aaaa"): EventRecord {
@@ -154,6 +162,47 @@ describe("TpsHandler", () => {
     const h = new TpsHandler({ alertThreshold: 18 });
     await h.handle(fakeContext(publisher), tpsEvent({ tps_1m: -1.5 }));
     expect(publisher.publish).toHaveBeenCalledOnce();
+  });
+
+  // ---------- freshness (BUG-02B) ----------
+
+  it("sample fresco con TPS bajo: publica alerta normalmente", async () => {
+    const publisher = fakePublisher();
+    const h = new TpsHandler({ alertThreshold: 18 });
+    const event = tpsEvent({ tps_1m: 12 });
+    event.ts = "2026-08-02T07:00:00.000Z";
+    event.received_at = "2026-08-02T07:00:00.500Z";
+    await h.handle(fakeContext(publisher), event);
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it("sample obsoleto con TPS bajo: NO publica y emite WARN", async () => {
+    const publisher = fakePublisher();
+    const warn = vi.fn();
+    const h = new TpsHandler({ alertThreshold: 18 });
+    const event = tpsEvent({ tps_1m: 5 });
+    event.ts = "2026-08-02T06:00:00.000Z";
+    event.received_at = "2026-08-02T07:00:00.000Z"; // 1h lag
+    await h.handle(fakeContext(publisher, { warn }), event);
+    expect(publisher.publish).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    const p = warn.mock.calls[0]![0] as Record<string, unknown>;
+    expect(p.handler).toBe("TpsHandler");
+    expect(p.motivo).toBe("evento_obsoleto");
+    expect(p.type).toBe("server.tps_sample");
+  });
+
+  it("sample obsoleto no lanza excepcion (cursor avanza) y no llega a extractTps", async () => {
+    // Doble virtud: aunque el payload sea invalido, no se dispara
+    // InvalidTpsError porque el evento obsoleto sale antes.
+    const publisher = fakePublisher();
+    const h = new TpsHandler({ alertThreshold: 18 });
+    const event = tpsEvent({ tps_1m: "no-es-numero" as unknown as number });
+    event.ts = "2026-08-01T07:00:00.000Z";
+    event.received_at = "2026-08-02T07:00:00.000Z"; // 24h lag
+    await expect(
+      h.handle(fakeContext(publisher), event),
+    ).resolves.toBeUndefined();
   });
 
   // ---------- validación del payload ----------

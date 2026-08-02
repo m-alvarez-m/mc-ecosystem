@@ -21,8 +21,16 @@ const NEVER_CALLED_RESOLVER = {
   }),
 } as unknown as import("../src/players").PlayerNameResolver;
 
-function fakeContext(publisher: Publisher): DispatchContext {
-  return { publisher, playerNameResolver: NEVER_CALLED_RESOLVER };
+function fakeContext(
+  publisher: Publisher,
+  overrides?: { warn?: (obj: unknown, msg?: string) => void; freshnessThresholdMs?: number },
+): DispatchContext {
+  return {
+    publisher,
+    playerNameResolver: NEVER_CALLED_RESOLVER,
+    logger: { warn: overrides?.warn ?? (() => undefined) },
+    freshnessThresholdMs: overrides?.freshnessThresholdMs ?? 120000,
+  };
 }
 
 function fakeEvent(type: string): EventRecord {
@@ -103,6 +111,59 @@ describe("ServerStartedHandler", () => {
     expect(seen).toEqual([
       { title: "Servidor iniciado", body: "Servidor iniciado correctamente.", kind: "server_started" },
     ]);
+  });
+
+  // ---------- freshness (BUG-02B) ----------
+
+  it("evento fresco (lag <= threshold): publica normalmente", async () => {
+    const publisher = fakePublisher();
+    const h = new ServerStartedHandler();
+    const event: EventRecord = {
+      ...fakeEvent("server.start"),
+      ts: "2026-08-02T07:00:00.000Z",
+      received_at: "2026-08-02T07:00:00.500Z", // 500 ms
+    };
+    await h.handle(fakeContext(publisher), event);
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it("evento obsoleto (lag > threshold): NO publica y emite WARN estructurado", async () => {
+    const publisher = fakePublisher();
+    const warn = vi.fn();
+    const h = new ServerStartedHandler();
+    const event: EventRecord = {
+      ...fakeEvent("server.start"),
+      ts: "2026-08-01T09:00:00.000Z",
+      received_at: "2026-08-02T07:00:00.000Z", // ~22h de lag
+    };
+    await h.handle(fakeContext(publisher, { warn }), event);
+    expect(publisher.publish).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    const [payload, msg] = warn.mock.calls[0]!;
+    const p = payload as Record<string, unknown>;
+    expect(p.event_uuid).toBe(event.event_uuid);
+    expect(p.id).toBe(event.id);
+    expect(p.type).toBe("server.start");
+    expect(p.handler).toBe("ServerStartedHandler");
+    expect(p.ts).toBe(event.ts);
+    expect(p.received_at).toBe(event.received_at);
+    expect(typeof p.lag_ms).toBe("number");
+    expect(p.threshold_ms).toBe(120000);
+    expect(p.motivo).toBe("evento_obsoleto");
+    expect(typeof msg).toBe("string");
+  });
+
+  it("evento obsoleto: NO lanza excepcion (cursor puede avanzar)", async () => {
+    const publisher = fakePublisher();
+    const h = new ServerStartedHandler();
+    const event: EventRecord = {
+      ...fakeEvent("server.start"),
+      ts: "2026-08-01T09:00:00.000Z",
+      received_at: "2026-08-02T07:00:00.000Z",
+    };
+    await expect(
+      h.handle(fakeContext(publisher), event),
+    ).resolves.toBeUndefined();
   });
 
   it("no lee campos del evento (payload no afecta la publicacion)", async () => {

@@ -19,8 +19,16 @@ const NEVER_CALLED_RESOLVER = {
   }),
 } as unknown as import("../src/players").PlayerNameResolver;
 
-function fakeContext(publisher: Publisher): DispatchContext {
-  return { publisher, playerNameResolver: NEVER_CALLED_RESOLVER };
+function fakeContext(
+  publisher: Publisher,
+  overrides?: { warn?: (obj: unknown, msg?: string) => void; freshnessThresholdMs?: number },
+): DispatchContext {
+  return {
+    publisher,
+    playerNameResolver: NEVER_CALLED_RESOLVER,
+    logger: { warn: overrides?.warn ?? (() => undefined) },
+    freshnessThresholdMs: overrides?.freshnessThresholdMs ?? 120000,
+  };
 }
 
 function fakeEvent(type: string): EventRecord {
@@ -93,6 +101,57 @@ describe("ServerStoppedHandler", () => {
     expect(seen).toEqual([
       { title: "Servidor detenido", body: "Servidor detenido correctamente.", kind: "server_stopped" },
     ]);
+  });
+
+  // ---------- freshness (BUG-02B — el caso reportado) ----------
+
+  it("evento fresco (lag <= threshold): publica normalmente", async () => {
+    const publisher = fakePublisher();
+    const h = new ServerStoppedHandler();
+    const event: EventRecord = {
+      ...fakeEvent("server.stop"),
+      ts: "2026-08-02T07:00:00.000Z",
+      received_at: "2026-08-02T07:00:00.500Z",
+    };
+    await h.handle(fakeContext(publisher), event);
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it("BUG-02: server.stop de ayer entregado hoy -> NO publica + WARN", async () => {
+    // Escenario textual del bug: ts del stop anterior + received_at
+    // del arranque de hoy = ~22 h de lag. Antes: bot decia "Servidor
+    // detenido" con el servidor arriba. Ahora: silencio + WARN.
+    const publisher = fakePublisher();
+    const warn = vi.fn();
+    const h = new ServerStoppedHandler();
+    const event: EventRecord = {
+      ...fakeEvent("server.stop"),
+      event_uuid: "4fa12f2c-d645-4f7e-bd64-73149de1968a",
+      id: "14082",
+      ts: "2026-08-01T09:08:32.427Z",
+      received_at: "2026-08-02T07:01:03.996Z",
+    };
+    await h.handle(fakeContext(publisher, { warn }), event);
+    expect(publisher.publish).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
+    const p = warn.mock.calls[0]![0] as Record<string, unknown>;
+    expect(p.handler).toBe("ServerStoppedHandler");
+    expect(p.motivo).toBe("evento_obsoleto");
+    expect(p.type).toBe("server.stop");
+    expect(p.threshold_ms).toBe(120000);
+  });
+
+  it("evento obsoleto: NO lanza excepcion (cursor puede avanzar)", async () => {
+    const publisher = fakePublisher();
+    const h = new ServerStoppedHandler();
+    const event: EventRecord = {
+      ...fakeEvent("server.stop"),
+      ts: "2026-08-01T09:00:00.000Z",
+      received_at: "2026-08-02T07:00:00.000Z",
+    };
+    await expect(
+      h.handle(fakeContext(publisher), event),
+    ).resolves.toBeUndefined();
   });
 
   it("payload del evento no modifica el mensaje", async () => {

@@ -1,3 +1,4 @@
+import type { Logger } from "pino";
 import type { Publisher } from "../publisher";
 import type { PlayerNameResolver } from "../players";
 
@@ -12,15 +13,20 @@ import type { PlayerNameResolver } from "../players";
 //   ocurra, tratarlo como cambio arquitectonico y documentar via
 //   ADR + commit propio.
 //
-// v1.1:
+// Campos actuales:
 // - `publisher`: sink de mensajes (Discord u otro).
 // - `playerNameResolver`: unica via de resolucion UUID → nombre.
-//   Anadido para desbloquear los 5 handlers de player (Etapa 4 del
-//   plan P0-2). Los handlers de server / tps / backup no lo consumen
-//   pero lo reciben igual: es responsabilidad del handler acceder solo
-//   a los campos que necesita.
+// - `logger`: sink de logs estructurados para decisiones editoriales
+//   del handler (WARN al descartar un evento obsoleto, etc.). NO es
+//   una excepcion — es una senal observable que el dispatcher no
+//   necesita atrapar. Handlers historicos no lo consumen; handlers
+//   de estado (BUG-02A) sí.
+// - `freshnessThresholdMs`: umbral que los handlers de estado usan
+//   para decidir si publicar. Configurado por env (default 120000 ms).
 
 export interface DispatchContext {
   publisher: Publisher;
   playerNameResolver: PlayerNameResolver;
+  logger: Pick<Logger, "warn">;
+  freshnessThresholdMs: number;
 }

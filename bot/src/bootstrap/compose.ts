@@ -204,7 +204,12 @@ export function composeApp(config: Config): App {
   // Dispatcher + handlers. Callbacks cableados directamente a
   // runtimeState + logger. Politica de logging centralizada AQUI:
   // ningun handler / cliente / motor imprime nada.
-  const context: DispatchContext = { publisher, playerNameResolver };
+  const context: DispatchContext = {
+    publisher,
+    playerNameResolver,
+    logger,
+    freshnessThresholdMs: config.freshness.thresholdMs,
+  };
   const dispatcher = new EventDispatcher({
     context,
     onUnknown: (event) => {

@@ -138,6 +138,8 @@ describe("PlayerNameResolver.resolve", () => {
         },
       },
       playerNameResolver: resolver,
+      logger: { warn: () => undefined },
+      freshnessThresholdMs: 120000,
     };
 
     const chatEvent: EventRecord = {
