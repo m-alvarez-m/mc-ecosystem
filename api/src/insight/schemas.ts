@@ -83,3 +83,36 @@ export const topRankingQuerySchema = {
     limit: { type: "string", pattern: "^[1-9]\\d*$" },
   },
 } as const;
+
+// -------------------------------------------------------------------
+// I3 · Schemas de patrones
+// -------------------------------------------------------------------
+
+/** Compartido por /insight/patterns/activity, /growth y /streaks. */
+export const patternsRangeQuerySchema = {
+  type: "object",
+  required: ["from", "to"],
+  additionalProperties: false,
+  properties: {
+    from: { type: "string", format: "date-time" },
+    to: { type: "string", format: "date-time" },
+  },
+} as const;
+
+/**
+ * /insight/patterns/players acepta dos umbrales opcionales:
+ *   - minActiveDays: recurrencia mínima (default en router).
+ *   - idleThresholdDays: días desde `to` para considerar idle.
+ * Ambos como string entero positivo (patrón de `limit` en I2).
+ */
+export const patternsPlayersQuerySchema = {
+  type: "object",
+  required: ["from", "to"],
+  additionalProperties: false,
+  properties: {
+    from: { type: "string", format: "date-time" },
+    to: { type: "string", format: "date-time" },
+    minActiveDays: { type: "string", pattern: "^[1-9]\\d*$" },
+    idleThresholdDays: { type: "string", pattern: "^[1-9]\\d*$" },
+  },
+} as const;

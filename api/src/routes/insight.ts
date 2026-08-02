@@ -4,6 +4,8 @@ import * as repo from "../insight/repository";
 import {
   activityQuerySchema,
   countQuerySchema,
+  patternsPlayersQuerySchema,
+  patternsRangeQuerySchema,
   playerParamsSchema,
   playersQuerySchema,
   timelineQuerySchema,
@@ -41,6 +43,12 @@ const MAX_TIMELINE_LIMIT = 1000;
 const DEFAULT_RANKING_LIMIT = 10;
 const MAX_RANKING_LIMIT = 100;
 
+// Defaults para /insight/patterns/players. Elegidos como valores
+// razonables sin heurísticas ocultas — el consumidor puede
+// sobreescribirlos explícitamente por query param.
+const DEFAULT_MIN_ACTIVE_DAYS = 3;
+const DEFAULT_IDLE_THRESHOLD_DAYS = 30;
+
 interface CountQuery {
   from: string;
   to: string;
@@ -65,6 +73,16 @@ interface TopRankingQuery {
   from: string;
   to: string;
   limit?: string;
+}
+interface PatternsRangeQuery {
+  from: string;
+  to: string;
+}
+interface PatternsPlayersQuery {
+  from: string;
+  to: string;
+  minActiveDays?: string;
+  idleThresholdDays?: string;
 }
 
 export async function insightRoutes(
@@ -192,6 +210,80 @@ export async function insightRoutes(
         MAX_RANKING_LIMIT,
       );
       return repo.topEventTypes(pool, { from: q.from, to: q.to, limit });
+    },
+  );
+
+  // -----------------------------------------------------------------
+  // I3 · Patrones objetivos
+  // -----------------------------------------------------------------
+
+  app.get<{ Querystring: PatternsRangeQuery }>(
+    "/insight/patterns/activity",
+    { schema: { querystring: patternsRangeQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      return repo.activityPatterns(pool, { from: q.from, to: q.to });
+    },
+  );
+
+  app.get<{ Querystring: PatternsRangeQuery }>(
+    "/insight/patterns/growth",
+    { schema: { querystring: patternsRangeQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      // Período previo con la misma duración, contiguo al actual.
+      // Se acepta un solape de 1 instante en q.from (los eventos con
+      // ts == q.from se contabilizan en ambos) — coste práctico ~0
+      // y evita restar 1 ms en el ISO string.
+      const fromMs = Date.parse(q.from);
+      const toMs = Date.parse(q.to);
+      const duration = toMs - fromMs;
+      const previousFromMs = fromMs - duration;
+      const previousFrom = new Date(previousFromMs).toISOString();
+      const previousTo = q.from;
+      return repo.growthPatterns(pool, {
+        currentFrom: q.from,
+        currentTo: q.to,
+        previousFrom,
+        previousTo,
+      });
+    },
+  );
+
+  app.get<{ Querystring: PatternsPlayersQuery }>(
+    "/insight/patterns/players",
+    { schema: { querystring: patternsPlayersQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      const minActiveDays = q.minActiveDays
+        ? parseInt(q.minActiveDays, 10)
+        : DEFAULT_MIN_ACTIVE_DAYS;
+      const idleThresholdDays = q.idleThresholdDays
+        ? parseInt(q.idleThresholdDays, 10)
+        : DEFAULT_IDLE_THRESHOLD_DAYS;
+      // Corte de idle = to - idleThresholdDays. Calculado aquí (no
+      // en SQL) para que el timestamp resultante viaje en la
+      // respuesta y sea auditable.
+      const toMs = Date.parse(q.to);
+      const idleCutoff = new Date(
+        toMs - idleThresholdDays * 86_400_000,
+      ).toISOString();
+      return repo.playerPatterns(pool, {
+        from: q.from,
+        to: q.to,
+        minActiveDays,
+        idleCutoff,
+        idleThresholdDays,
+      });
+    },
+  );
+
+  app.get<{ Querystring: PatternsRangeQuery }>(
+    "/insight/patterns/streaks",
+    { schema: { querystring: patternsRangeQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      return repo.streakPatterns(pool, { from: q.from, to: q.to });
     },
   );
 }
