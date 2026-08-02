@@ -114,3 +114,48 @@ export interface ServerInsight {
   readonly timeRangeStart: Date | null;
   readonly timeRangeEnd: Date | null;
 }
+
+// -------------------------------------------------------------------
+// I2 · Agregados reutilizables
+// -------------------------------------------------------------------
+
+/**
+ * Elemento del heatmap horario (0-23 UTC). Sólo aparecen horas con
+ * eventos — el consumidor rellena con ceros si necesita el histograma
+ * completo. `hour` viene del EXTRACT de Postgres como integer.
+ */
+export interface ActivityHourBucket {
+  readonly hour: number;
+  readonly count: string;
+}
+
+/**
+ * Elemento de la serie temporal por día (UTC). `date` en formato
+ * ISO YYYY-MM-DD sin componente horaria. Sólo aparecen días con
+ * eventos — si el rango cubre huecos, el consumidor los interpola.
+ */
+export interface ActivityDayBucket {
+  readonly date: string;
+  readonly count: string;
+}
+
+/**
+ * Fila del ranking de jugadores más activos en un rango. `name` es
+ * el nombre canónico ACTUAL del jugador (viene de `players.name`
+ * via JOIN); si el nombre cambió durante el rango, sale el actual.
+ */
+export interface TopPlayer {
+  readonly uuid: string;
+  readonly name: string;
+  readonly count: string;
+}
+
+/**
+ * Fila del ranking de tipos de evento más frecuentes en un rango.
+ * Reordenable — el orden natural es DESC por count, ASC por type
+ * como desempate estable (útil en tests deterministas).
+ */
+export interface TopEventType {
+  readonly type: string;
+  readonly count: string;
+}

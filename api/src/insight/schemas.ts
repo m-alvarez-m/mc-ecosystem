@@ -49,3 +49,37 @@ export const playerParamsSchema = {
     uuid: { type: "string", format: "uuid" },
   },
 } as const;
+
+// -------------------------------------------------------------------
+// I2 · Schemas de agregados
+// -------------------------------------------------------------------
+
+/**
+ * Rango temporal obligatorio. Compartido por hourly y daily —
+ * ambos reciben exactamente los mismos params.
+ */
+export const activityQuerySchema = {
+  type: "object",
+  required: ["from", "to"],
+  additionalProperties: false,
+  properties: {
+    from: { type: "string", format: "date-time" },
+    to: { type: "string", format: "date-time" },
+  },
+} as const;
+
+/**
+ * Rango temporal + limit opcional. Compartido por top players y
+ * top event types — mismo shape porque son dos rankings del mismo
+ * tipo estructural, sólo cambia la dimensión agrupada.
+ */
+export const topRankingQuerySchema = {
+  type: "object",
+  required: ["from", "to"],
+  additionalProperties: false,
+  properties: {
+    from: { type: "string", format: "date-time" },
+    to: { type: "string", format: "date-time" },
+    limit: { type: "string", pattern: "^[1-9]\\d*$" },
+  },
+} as const;

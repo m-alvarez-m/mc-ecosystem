@@ -2,10 +2,12 @@ import { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
 import * as repo from "../insight/repository";
 import {
+  activityQuerySchema,
   countQuerySchema,
-  timelineQuerySchema,
-  playersQuerySchema,
   playerParamsSchema,
+  playersQuerySchema,
+  timelineQuerySchema,
+  topRankingQuerySchema,
 } from "../insight/schemas";
 
 // Rutas GET /insight/*.
@@ -33,6 +35,12 @@ export interface InsightRoutesDeps {
 const DEFAULT_TIMELINE_LIMIT = 100;
 const MAX_TIMELINE_LIMIT = 1000;
 
+// Cota interna para rankings (top players / top event types). Un
+// ranking rara vez es útil por encima de 100 filas — el cliente
+// puede pedir menos si sólo quiere podio.
+const DEFAULT_RANKING_LIMIT = 10;
+const MAX_RANKING_LIMIT = 100;
+
 interface CountQuery {
   from: string;
   to: string;
@@ -48,6 +56,15 @@ interface PlayersQuery {
 }
 interface PlayerParams {
   uuid: string;
+}
+interface ActivityQuery {
+  from: string;
+  to: string;
+}
+interface TopRankingQuery {
+  from: string;
+  to: string;
+  limit?: string;
 }
 
 export async function insightRoutes(
@@ -129,4 +146,52 @@ export async function insightRoutes(
   app.get("/insight/server", async () => {
     return repo.serverInsight(pool);
   });
+
+  // -----------------------------------------------------------------
+  // I2 · Agregados
+  // -----------------------------------------------------------------
+
+  app.get<{ Querystring: ActivityQuery }>(
+    "/insight/activity/hourly",
+    { schema: { querystring: activityQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      return repo.activityByHour(pool, { from: q.from, to: q.to });
+    },
+  );
+
+  app.get<{ Querystring: ActivityQuery }>(
+    "/insight/activity/daily",
+    { schema: { querystring: activityQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      return repo.activityByDay(pool, { from: q.from, to: q.to });
+    },
+  );
+
+  app.get<{ Querystring: TopRankingQuery }>(
+    "/insight/players/top",
+    { schema: { querystring: topRankingQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      const limit = Math.min(
+        q.limit ? parseInt(q.limit, 10) : DEFAULT_RANKING_LIMIT,
+        MAX_RANKING_LIMIT,
+      );
+      return repo.topPlayers(pool, { from: q.from, to: q.to, limit });
+    },
+  );
+
+  app.get<{ Querystring: TopRankingQuery }>(
+    "/insight/types/top",
+    { schema: { querystring: topRankingQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      const limit = Math.min(
+        q.limit ? parseInt(q.limit, 10) : DEFAULT_RANKING_LIMIT,
+        MAX_RANKING_LIMIT,
+      );
+      return repo.topEventTypes(pool, { from: q.from, to: q.to, limit });
+    },
+  );
 }

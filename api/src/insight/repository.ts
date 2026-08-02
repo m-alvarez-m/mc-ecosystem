@@ -1,5 +1,7 @@
 import type { Pool } from "pg";
 import type {
+  ActivityDayBucket,
+  ActivityHourBucket,
   EventCount,
   PlayerEventReference,
   PlayerInsight,
@@ -7,6 +9,8 @@ import type {
   ServerInsight,
   ServerEventReference,
   TimelineEvent,
+  TopEventType,
+  TopPlayer,
 } from "./types";
 
 // Repositorio SQL de Insight.
@@ -248,4 +252,118 @@ export async function serverInsight(pool: QueryClient): Promise<ServerInsight> {
     timeRangeStart: firstEvent?.ts ?? null,
     timeRangeEnd: lastEvent?.ts ?? null,
   };
+}
+
+// --------------------------------------------------------------------
+// I2 · Agregados sobre el Event Store
+// --------------------------------------------------------------------
+//
+// Los cuatro agregados de I2 se derivan EXCLUSIVAMENTE de `events`
+// (y `players` para el JOIN de topPlayers). Cero tablas nuevas, cero
+// materialized views. Todo se recomputa en cada request — aceptable
+// para el volumen actual; si Insight escala, un ticket futuro podría
+// añadir agregados precomputados (mencionado en el roadmap Insight).
+
+// --------------------------------------------------------------------
+// GET /insight/activity/hourly
+// --------------------------------------------------------------------
+
+export async function activityByHour(
+  pool: QueryClient,
+  params: { from: string; to: string },
+): Promise<ActivityHourBucket[]> {
+  // EXTRACT(HOUR FROM ts) es UTC porque `ts` es TIMESTAMPTZ almacenado
+  // como UTC (el plugin emite Instant.now()). Sólo se devuelven horas
+  // con eventos — el consumidor rellena con 0 si necesita el histograma
+  // completo de 24 posiciones.
+  const result = await pool.query<{ hour: number; count: string }>(
+    `SELECT EXTRACT(HOUR FROM ts)::int AS hour, COUNT(*)::text AS count
+       FROM events
+       WHERE ts >= $1::timestamptz
+         AND ts <= $2::timestamptz
+       GROUP BY hour
+       ORDER BY hour ASC`,
+    [params.from, params.to],
+  );
+  return result.rows;
+}
+
+// --------------------------------------------------------------------
+// GET /insight/activity/daily
+// --------------------------------------------------------------------
+
+export async function activityByDay(
+  pool: QueryClient,
+  params: { from: string; to: string },
+): Promise<ActivityDayBucket[]> {
+  // to_char sobre date_trunc('day', ts) da la fecha en UTC en formato
+  // ISO 'YYYY-MM-DD'. Días sin eventos NO aparecen — el consumidor
+  // interpola si necesita la serie continua.
+  const result = await pool.query<{ date: string; count: string }>(
+    `SELECT to_char(date_trunc('day', ts), 'YYYY-MM-DD') AS date,
+            COUNT(*)::text AS count
+       FROM events
+       WHERE ts >= $1::timestamptz
+         AND ts <= $2::timestamptz
+       GROUP BY date_trunc('day', ts)
+       ORDER BY date_trunc('day', ts) ASC`,
+    [params.from, params.to],
+  );
+  return result.rows;
+}
+
+// --------------------------------------------------------------------
+// GET /insight/players/top
+// --------------------------------------------------------------------
+
+export async function topPlayers(
+  pool: QueryClient,
+  params: { from: string; to: string; limit: number },
+): Promise<TopPlayer[]> {
+  // JOIN necesario para devolver el nombre canónico junto al UUID —
+  // evita N+1 round-trips desde el consumidor. `players.uuid` es PK,
+  // el JOIN es índice-índice y muy barato. El filtro `player_uuid IS
+  // NOT NULL` es implícito por el INNER JOIN (los eventos de servidor
+  // como server.start no cuentan). Tie-breaker por p.uuid para
+  // resultado determinista si dos jugadores tienen mismo count.
+  const result = await pool.query<{
+    uuid: string;
+    name: string;
+    count: string;
+  }>(
+    `SELECT p.uuid, p.name, COUNT(e.id)::text AS count
+       FROM events e
+       JOIN players p ON p.uuid = e.player_uuid
+       WHERE e.ts >= $1::timestamptz
+         AND e.ts <= $2::timestamptz
+       GROUP BY p.uuid, p.name
+       ORDER BY COUNT(e.id) DESC, p.uuid ASC
+       LIMIT $3::int`,
+    [params.from, params.to, params.limit],
+  );
+  return result.rows;
+}
+
+// --------------------------------------------------------------------
+// GET /insight/types/top
+// --------------------------------------------------------------------
+
+export async function topEventTypes(
+  pool: QueryClient,
+  params: { from: string; to: string; limit: number },
+): Promise<TopEventType[]> {
+  // Ranking DESC por count con tie-breaker `type ASC` — mismo criterio
+  // que countEvents pero limitable para consumidores que sólo quieren
+  // el top N (los tipos raros no importan en un dashboard).
+  const result = await pool.query<{ type: string; count: string }>(
+    `SELECT type, COUNT(*)::text AS count
+       FROM events
+       WHERE ts >= $1::timestamptz
+         AND ts <= $2::timestamptz
+       GROUP BY type
+       ORDER BY COUNT(*) DESC, type ASC
+       LIMIT $3::int`,
+    [params.from, params.to, params.limit],
+  );
+  return result.rows;
 }
