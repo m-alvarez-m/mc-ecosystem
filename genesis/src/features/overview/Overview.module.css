@@ -1,0 +1,41 @@
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-2);
+  margin-bottom: var(--gs-space-6);
+}
+
+.subtitle {
+  color: var(--gs-color-text-muted);
+  font-size: var(--gs-font-size-sm);
+}
+
+/*
+ * Grid responsivo de insight cards.
+ *   - mobile (< 768px):  1 columna
+ *   - tablet (>= 768):   2 columnas
+ *   - desktop (>= 1280): 3 columnas
+ *
+ * Con auto-fit + minmax podriamos ser mas "fluidos", pero el tamaño
+ * de una InsightCard es sensible a cambios de layout (columnas de
+ * la lista de facts). Las 3 columnas explicitas dan un look
+ * predecible en cada tamaño.
+ */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gs-space-4);
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--gs-space-6);
+  }
+}
+
+@media (min-width: 1280px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

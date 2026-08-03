@@ -1,25 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { App } from "../src/App";
 import { Home } from "../src/pages/Home";
 
-// Smoke test de D1.
+// Smoke test end-to-end de la aplicacion (evolucion D1 → D3).
 //
-// Verifica:
-//   1. La aplicacion monta sin lanzar.
-//   2. TanStack Query recibe una respuesta mockeada de fetch.
-//   3. El JSON crudo se pinta en el DOM (proof-of-life).
-//
-// No prueba estilos, ni rutas complejas, ni error boundaries. El
-// alcance es demostrar que el pipeline React + Query + fetch esta
-// vivo y consumible desde el arbol del componente.
+// D1 pintaba <pre>{JSON}</pre>. D3 pinta el Overview con Cards. Los
+// tests verifican la MISMA cadena (mount + fetch + TanStack Query +
+// render), ahora contra la nueva UI:
+//   - loading state visible antes de resolver
+//   - despues de resolver: 1 card por insight, con titulo, categoria,
+//     confidence badge y una entrada del listado accesible role=listitem
+//   - fetch invocado contra /api/insight/insights con la ventana
+//     desde ADR-007
+//   - error HTTP → ErrorState con boton Reintentar; onRetry re-lanza
+//     la query
 
 function renderWithProviders() {
-  // QueryClient nuevo por test: sin retries (para que un fetch fallado
-  // se traduzca en error inmediatamente en el DOM) y sin cache
-  // compartida entre tests.
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
@@ -52,13 +52,25 @@ const SAMPLE_INSIGHTS = [
       confidenceThresholds: { medium: 10, high: 100 },
     },
   },
+  {
+    id: "exploration-trend",
+    category: "exploration",
+    severity: "critical",
+    confidence: "low",
+    generatedAt: "2026-08-02T00:00:00Z",
+    window: { from: "2026-07-26T23:25:52Z", to: "2026-08-02T00:00:00Z" },
+    facts: { currentChunks: "0", previousChunks: "5130", trend: "down" },
+    evidence: ["exploration"],
+    metadata: {
+      engineVersion: "1.0",
+      severityThresholds: { normal: 0.1, low: 0.25, high: 0.5 },
+      confidenceThresholds: { medium: 10, high: 100 },
+    },
+  },
 ];
 
-describe("Genesis · D1 · smoke", () => {
+describe("Genesis · smoke (D3)", () => {
   beforeEach(() => {
-    // Mock global.fetch para todos los tests de este describe. Se usa
-    // un objeto plano en lugar de `new Response(...)` porque el
-    // environment jsdom no siempre trae la clase Response global.
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: unknown) => {
@@ -85,31 +97,61 @@ describe("Genesis · D1 · smoke", () => {
     vi.unstubAllGlobals();
   });
 
-  it("la aplicacion monta y muestra el estado de carga inicial", () => {
+  it("monta y muestra el loading state antes de resolver", () => {
     renderWithProviders();
-    expect(screen.getByText(/Cargando insights/i)).toBeInTheDocument();
+    // El LoadingState pinta `<div role="status">` con la etiqueta
+    // dentro. Buscamos por texto (accesible via aria-live) porque el
+    // `name` accesible de role=status no siempre incluye el text
+    // content en Testing Library.
+    expect(screen.getByText(/cargando insights/i)).toBeInTheDocument();
   });
 
-  it("TanStack Query resuelve y renderiza el JSON crudo del Insight Engine", async () => {
-    const { container } = renderWithProviders();
-    // Esperamos a que la query resuelva. Como el <pre> contiene JSON
-    // con muchas comillas y llaves, buscamos por selector directo en
-    // lugar de matcher de texto (mas robusto que TL para JSON).
+  it("resuelve la query y pinta una card por insight con titulo humano", async () => {
+    renderWithProviders();
     await waitFor(() => {
-      const pre = container.querySelector("pre");
-      expect(pre).not.toBeNull();
-      expect(pre!.textContent ?? "").not.toMatch(/Cargando/);
+      expect(screen.getByText("Tendencia de actividad")).toBeInTheDocument();
     });
-    const pre = container.querySelector("pre")!;
-    const parsed = JSON.parse(pre.textContent ?? "[]");
-    expect(parsed).toEqual(SAMPLE_INSIGHTS);
+    // Los 4 insights? En este test solo hay 2 en la muestra, pero
+    // ambos deben aparecer con su titulo humano.
+    expect(screen.getByText("Tendencia de exploración")).toBeInTheDocument();
+
+    // La lista tiene role=list + 2 items role=listitem.
+    const list = screen.getByRole("list", { name: /insights del ecosistema/i });
+    expect(list).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("fetch se llama contra /api/insight/insights con el rango temporal correcto", async () => {
+  it("cada card expone data-insight-id y su severity", async () => {
     const { container } = renderWithProviders();
     await waitFor(() => {
-      const pre = container.querySelector("pre");
-      expect(pre?.textContent ?? "").not.toMatch(/Cargando/);
+      expect(container.querySelector('[data-insight-id="activity-trend"]'))
+        .not.toBeNull();
+    });
+    const activityCard = container.querySelector<HTMLElement>(
+      '[data-insight-id="activity-trend"]',
+    )!;
+    expect(activityCard.querySelector('[data-severity="normal"]')).not.toBeNull();
+    const explorationCard = container.querySelector<HTMLElement>(
+      '[data-insight-id="exploration-trend"]',
+    )!;
+    expect(explorationCard.querySelector('[data-severity="critical"]'))
+      .not.toBeNull();
+  });
+
+  it("confidence se muestra como Badge (no como porcentaje)", async () => {
+    renderWithProviders();
+    await waitFor(() => {
+      expect(screen.getByText("Confianza alta")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Confianza baja")).toBeInTheDocument();
+    // Sin "%": D3 prohibe representar confidence como porcentaje.
+    expect(screen.queryByText(/%/)).toBeNull();
+  });
+
+  it("fetch se llama contra /api/insight/insights con from=ADR-007", async () => {
+    renderWithProviders();
+    await waitFor(() => {
+      expect(screen.getByText("Tendencia de actividad")).toBeInTheDocument();
     });
     const calls = (fetch as unknown as { mock: { calls: [unknown][] } }).mock
       .calls;
@@ -120,7 +162,7 @@ describe("Genesis · D1 · smoke", () => {
     expect(url).toContain("to=");
   });
 
-  it("propaga el error HTTP a la UI cuando la API falla", async () => {
+  it("error HTTP muestra ErrorState reutilizable con boton Reintentar", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -132,7 +174,35 @@ describe("Genesis · D1 · smoke", () => {
     );
     renderWithProviders();
     await waitFor(() => {
-      expect(screen.getByText(/Error/)).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/no se pudieron cargar los insights/i))
+      .toBeInTheDocument();
+    // Boton reintentar visible; al hacer click, fetch se re-invoca.
+    const retry = screen.getByRole("button", { name: /reintentar/i });
+    const callsBefore = (fetch as unknown as { mock: { calls: unknown[] } })
+      .mock.calls.length;
+    await userEvent.click(retry);
+    await waitFor(() => {
+      const callsAfter = (fetch as unknown as { mock: { calls: unknown[] } })
+        .mock.calls.length;
+      expect(callsAfter).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  it("cuando la API devuelve [] muestra EmptyState elegante", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => [],
+        text: async () => "[]",
+      }) as unknown as Response),
+    );
+    renderWithProviders();
+    await waitFor(() => {
+      expect(screen.getByText(/aún no hay insights/i)).toBeInTheDocument();
     });
   });
 });
