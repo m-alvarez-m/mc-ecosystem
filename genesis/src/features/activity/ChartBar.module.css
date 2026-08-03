@@ -1,0 +1,42 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--gs-space-1);
+  min-width: 0;
+}
+
+/* Contenedor de la barra: alto fijo controlado por el padre via
+ * variable `--chart-bar-height`. La barra se posiciona bottom-up.
+ */
+.track {
+  position: relative;
+  width: 100%;
+  min-width: 12px;
+  max-width: 36px;
+  height: var(--chart-bar-height, 160px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.bar {
+  width: 100%;
+  height: calc(var(--pct, 0) * 100%);
+  min-height: 2px; /* siempre visible aun con count=0 */
+  background-color: var(--gs-color-primary);
+  border-radius: var(--gs-radius-sm) var(--gs-radius-sm) 0 0;
+  opacity: 0.9;
+}
+
+.barEmpty {
+  background-color: var(--gs-color-border);
+  opacity: 1;
+}
+
+.label {
+  color: var(--gs-color-text-muted);
+  font-size: var(--gs-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

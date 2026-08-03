@@ -1,0 +1,37 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-3);
+  min-width: 0;
+}
+
+.gridWrap {
+  overflow-x: auto;
+  padding-bottom: var(--gs-space-1);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(22px, 1fr));
+  gap: var(--gs-space-1);
+  min-width: 528px; /* 24 * 22px */
+}
+
+.axis {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(22px, 1fr));
+  gap: var(--gs-space-1);
+  min-width: 528px;
+}
+
+.axisTick {
+  color: var(--gs-color-text-muted);
+  font-size: var(--gs-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.axisTickHidden {
+  visibility: hidden;
+}

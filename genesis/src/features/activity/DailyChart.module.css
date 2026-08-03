@@ -1,0 +1,18 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-3);
+  min-width: 0;
+}
+
+.gridWrap {
+  overflow-x: auto;
+  padding-bottom: var(--gs-space-1);
+}
+
+.grid {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--gs-space-2);
+  padding-block: var(--gs-space-2);
+}

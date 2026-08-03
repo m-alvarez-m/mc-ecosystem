@@ -99,6 +99,19 @@ const SAMPLE_PLAYERS = {
   returningPlayers: "1",
 };
 
+// D7: fixtures de /insight/activity/{hourly,daily}. La API sólo
+// devuelve buckets con eventos; el cliente rellena huecos.
+const SAMPLE_HOURLY = [
+  { hour: 0, count: "10" },
+  { hour: 12, count: "120" },
+  { hour: 20, count: "45" },
+];
+
+const SAMPLE_DAILY = [
+  { date: "2026-07-26", count: "200" },
+  { date: "2026-08-01", count: "350" },
+];
+
 // D6: fixture de /insight/players/top (listado de jugadores).
 const SAMPLE_TOP_PLAYERS = [
   {
@@ -191,6 +204,22 @@ function stubFetchAll(): void {
           status: 200,
           json: async () => SAMPLE_TIMELINE,
           text: async () => JSON.stringify(SAMPLE_TIMELINE),
+        } as unknown as Response;
+      }
+      if (url.includes("/api/insight/activity/hourly")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => SAMPLE_HOURLY,
+          text: async () => JSON.stringify(SAMPLE_HOURLY),
+        } as unknown as Response;
+      }
+      if (url.includes("/api/insight/activity/daily")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => SAMPLE_DAILY,
+          text: async () => JSON.stringify(SAMPLE_DAILY),
         } as unknown as Response;
       }
       return {
@@ -320,9 +349,9 @@ describe("Genesis · smoke (D4)", () => {
     );
     renderWithProviders();
     await waitFor(() => {
-      // D6: Summary + Overview + Timeline + PlayersExplorer →
-      // 4 secciones con ErrorState.
-      expect(screen.getAllByRole("alert")).toHaveLength(4);
+      // D7: Summary + Overview + Timeline + PlayersExplorer +
+      // ActivityAnalytics → 5 secciones con ErrorState.
+      expect(screen.getAllByRole("alert")).toHaveLength(5);
     });
     expect(
       screen.getByText(/no se pudieron cargar los insights/i),
@@ -336,9 +365,12 @@ describe("Genesis · smoke (D4)", () => {
     expect(
       screen.getByText(/no se pudo cargar la lista de jugadores/i),
     ).toBeInTheDocument();
-    // 4 botones Reintentar (uno por seccion).
+    expect(
+      screen.getByText(/no se pudo cargar la actividad/i),
+    ).toBeInTheDocument();
+    // 5 botones Reintentar (uno por seccion).
     const retryBtns = screen.getAllByRole("button", { name: /reintentar/i });
-    expect(retryBtns).toHaveLength(4);
+    expect(retryBtns).toHaveLength(5);
     const callsBefore = (fetch as unknown as { mock: { calls: unknown[] } })
       .mock.calls.length;
     await userEvent.click(retryBtns[0]!);
@@ -396,6 +428,22 @@ describe("Genesis · smoke (D4)", () => {
             text: async () => JSON.stringify(SAMPLE_TIMELINE),
           } as unknown as Response;
         }
+        if (url.includes("/api/insight/activity/hourly")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => SAMPLE_HOURLY,
+            text: async () => JSON.stringify(SAMPLE_HOURLY),
+          } as unknown as Response;
+        }
+        if (url.includes("/api/insight/activity/daily")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => SAMPLE_DAILY,
+            text: async () => JSON.stringify(SAMPLE_DAILY),
+          } as unknown as Response;
+        }
         return {
           ok: false,
           status: 404,
@@ -414,6 +462,25 @@ describe("Genesis · smoke (D4)", () => {
     expect(screen.getByTestId("timeline-list")).toBeInTheDocument();
     // El PlayersExplorer también.
     expect(screen.getByTestId("players-grid")).toBeInTheDocument();
+    // ActivityAnalytics también.
+    expect(screen.getByTestId("activity-cards")).toBeInTheDocument();
+  });
+
+  it("Activity Analytics es la 5a sección con heatmap y chart (D7)", async () => {
+    renderWithProviders();
+    await waitFor(() => {
+      expect(screen.getByTestId("activity-cards")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("heading", { level: 2, name: /^activity analytics$/i }),
+    ).toBeInTheDocument();
+    // Ambos gráficos presentes.
+    expect(screen.getByTestId("hourly-heatmap")).toBeInTheDocument();
+    expect(screen.getByTestId("daily-chart")).toBeInTheDocument();
+    // 24 celdas fijas en el heatmap.
+    const heatmap = screen.getByTestId("hourly-heatmap");
+    const cells = heatmap.querySelectorAll('[role="img"]');
+    expect(cells.length).toBe(24);
   });
 
   it("Players se pinta como cuarta sección con cards por jugador (D6)", async () => {

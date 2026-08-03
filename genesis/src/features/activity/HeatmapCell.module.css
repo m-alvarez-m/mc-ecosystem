@@ -1,0 +1,11 @@
+.root {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--gs-radius-sm);
+  border: 1px solid var(--gs-color-border);
+  background-color: var(--gs-color-primary);
+  /* opacity se aplica inline segun `--intensity`. Cell vacia queda
+   * cerca de transparente (0.05) — visible pero neutra. */
+  min-width: 22px;
+  min-height: 22px;
+}

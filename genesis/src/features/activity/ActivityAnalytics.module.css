@@ -1,0 +1,60 @@
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-4);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-1);
+}
+
+.subtitle {
+  color: var(--gs-color-text-muted);
+  font-size: var(--gs-font-size-sm);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-3);
+  padding: var(--gs-space-5);
+}
+
+.cardHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-1);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: var(--gs-font-size-md);
+  font-weight: var(--gs-font-weight-semibold);
+  color: var(--gs-color-text);
+  line-height: var(--gs-line-height-tight);
+}
+
+.cardSubtitle {
+  color: var(--gs-color-text-muted);
+  font-size: var(--gs-font-size-sm);
+}
+
+.cardStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-5);
+}
+
+@media (min-width: 1280px) {
+  .cardStack {
+    /* En desktop, ambos gráficos comparten fila si hay espacio.
+     * Cada uno ocupa 1fr; heatmap ~528px min, chart flexible.
+     * Fallback a stack si no cabe.
+     */
+    display: grid;
+    grid-template-columns: minmax(540px, 1fr) minmax(540px, 1fr);
+    gap: var(--gs-space-5);
+  }
+}
