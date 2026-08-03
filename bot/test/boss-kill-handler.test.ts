@@ -39,7 +39,8 @@ function fakeContext(
   publisher: Publisher,
   resolver: PlayerNameResolver,
 ): DispatchContext {
-  return { publisher, playerNameResolver: resolver, logger: { warn: () => undefined }, freshnessThresholdMs: 120000 };
+  return { publisher, playerNameResolver: resolver, logger: { warn: () => undefined }, freshnessThresholdMs: 120000,
+      lifecycleState: { get: () => "unknown" as const, set: () => undefined }, lifecycleState: { get: () => "unknown", set: () => undefined } };
 }
 
 // UUIDs de conveniencia para los tests.

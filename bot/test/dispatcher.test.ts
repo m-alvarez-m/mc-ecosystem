@@ -49,6 +49,7 @@ function fakeContext(publisher?: Publisher): DispatchContext {
     } as unknown as import("../src/players").PlayerNameResolver,
     logger: { warn: () => undefined },
     freshnessThresholdMs: 120000,
+      lifecycleState: { get: () => "unknown" as const, set: () => undefined },
   };
 }
 
@@ -143,6 +144,7 @@ describe("EventDispatcher", () => {
       } as unknown as import("../src/players").PlayerNameResolver,
       logger: { warn: () => undefined },
       freshnessThresholdMs: 120000,
+      lifecycleState: { get: () => "unknown" as const, set: () => undefined },
     };
     const d = new EventDispatcher({ context: customContext });
 

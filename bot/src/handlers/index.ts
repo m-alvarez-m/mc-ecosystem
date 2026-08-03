@@ -1,5 +1,13 @@
 // Barrel export del modulo handlers.
 
+export {
+  createLifecycleStateStore,
+} from "./lifecycle-state";
+export type {
+  LifecycleStateStore,
+  ServerLifecycleState,
+} from "./lifecycle-state";
+
 export { MissingPlayerUuidError } from "./errors";
 
 export { ServerStartedHandler } from "./server-started-handler";

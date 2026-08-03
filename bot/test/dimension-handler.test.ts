@@ -49,7 +49,8 @@ function fakeContext(
   publisher: Publisher,
   resolver: PlayerNameResolver,
 ): DispatchContext {
-  return { publisher, playerNameResolver: resolver, logger: { warn: () => undefined }, freshnessThresholdMs: 120000 };
+  return { publisher, playerNameResolver: resolver, logger: { warn: () => undefined }, freshnessThresholdMs: 120000,
+      lifecycleState: { get: () => "unknown" as const, set: () => undefined }, lifecycleState: { get: () => "unknown", set: () => undefined } };
 }
 
 const MIGUEL = "71804e99-f2aa-32dc-bfcb-0ea5cfdda708";

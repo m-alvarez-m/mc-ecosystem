@@ -234,6 +234,7 @@ describe("composeApp", () => {
       } as unknown as PlayerNameResolver,
       logger: { warn: () => undefined },
       freshnessThresholdMs: 120000,
+      lifecycleState: { get: () => "unknown" as const, set: () => undefined },
     };
     const dispatcher = new EventDispatcher({
       context,
@@ -279,6 +280,7 @@ describe("composeApp", () => {
       } as unknown as PlayerNameResolver,
       logger: { warn: () => undefined },
       freshnessThresholdMs: 120000,
+      lifecycleState: { get: () => "unknown" as const, set: () => undefined },
     };
     const dispatcher = new EventDispatcher({
       context,

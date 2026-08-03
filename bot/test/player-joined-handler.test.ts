@@ -42,6 +42,7 @@ function fakeContext(
     playerNameResolver: resolver,
     logger: { warn: overrides?.warn ?? (() => undefined) },
     freshnessThresholdMs: overrides?.freshnessThresholdMs ?? 120000,
+    lifecycleState: overrides?.lifecycleState ?? { get: () => "unknown" as const, set: () => undefined },
   };
 }
 

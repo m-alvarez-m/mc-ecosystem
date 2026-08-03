@@ -11,6 +11,7 @@ import type { CursorStore } from "../cursor";
 import { RuntimeState } from "../observability";
 import { PlayerNameResolver } from "../players";
 import { PollingEngine } from "../polling";
+import { createLifecycleStateStore } from "../handlers/lifecycle-state";
 import {
   ServerStartedHandler,
   ServerStoppedHandler,
@@ -201,6 +202,12 @@ export function composeApp(config: Config): App {
   // health server futuro (T7) leera runtimeState.snapshot().
   const runtimeState = new RuntimeState();
 
+  // Maquina de estados lifecycle server-wide (BUG-02C). En memoria
+  // — sin persistencia, ver justificacion en handlers/lifecycle-state.
+  // Los handlers ServerStartedHandler y ServerStoppedHandler la
+  // consultan para evitar duplicados frescos.
+  const lifecycleState = createLifecycleStateStore();
+
   // Dispatcher + handlers. Callbacks cableados directamente a
   // runtimeState + logger. Politica de logging centralizada AQUI:
   // ningun handler / cliente / motor imprime nada.
@@ -209,6 +216,7 @@ export function composeApp(config: Config): App {
     playerNameResolver,
     logger,
     freshnessThresholdMs: config.freshness.thresholdMs,
+    lifecycleState,
   };
   const dispatcher = new EventDispatcher({
     context,

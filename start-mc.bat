@@ -113,7 +113,8 @@ REM    base (postgres, api, backup, playit) -> publish-pack-url.sh
 REM    (que levanta packserver + cloudflared -> verifica URL -> minecraft)
 REM ============================================================
 echo Levantando servicios base ^(postgres, api, backup, playit, bot^)...
-docker compose -f infra\docker-compose.dev.yml -f !MC_COMPOSE! -p mc-ecosystem up -d postgres api backup playit bot
+REM --build evita reutilizar una imagen local anterior al codigo actual.
+docker compose -f infra\docker-compose.dev.yml -f !MC_COMPOSE! -p mc-ecosystem up -d --build postgres api backup playit bot
 if errorlevel 1 (
     echo.
     echo ERROR: no se pudieron levantar los servicios base.
