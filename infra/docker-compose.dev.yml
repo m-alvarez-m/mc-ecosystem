@@ -117,6 +117,31 @@ services:
         max-file: "5"
     restart: unless-stopped
 
+  genesis:
+    # Dashboard Genesis (D1 · foundation). SPA React + Vite compilada
+    # y servida por nginx:alpine dentro de este contenedor. El mismo
+    # nginx hace reverse-proxy /api/* -> http://api:3000/* para que el
+    # navegador vea un unico origen (sin CORS en la API).
+    #
+    # Solo esta declarado en docker-compose.dev.yml — la exposicion en
+    # produccion queda para cuando exista autenticacion (ver auditoria
+    # D1 §10).
+    build: ../genesis
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      # nginx.conf expone GET /health -> "ok". Usa wget (nginx:alpine
+      # no trae curl) contra 127.0.0.1 explicito: BusyBox wget no
+      # resuelve `localhost` en todas las variantes de la imagen.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   postgres:
     image: postgres:16
     environment:
