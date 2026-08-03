@@ -23,21 +23,13 @@ const NEVER_CALLED_RESOLVER = {
 
 function fakeContext(
   publisher: Publisher,
-  overrides?: {
-    warn?: (obj: unknown, msg?: string) => void;
-    freshnessThresholdMs?: number;
-    lifecycleState?: {
-      get: () => "unknown" | "up" | "down";
-      set: (n: "unknown" | "up" | "down") => void;
-    };
-  },
+  overrides?: { warn?: (obj: unknown, msg?: string) => void; freshnessThresholdMs?: number },
 ): DispatchContext {
   return {
     publisher,
     playerNameResolver: NEVER_CALLED_RESOLVER,
     logger: { warn: overrides?.warn ?? (() => undefined) },
     freshnessThresholdMs: overrides?.freshnessThresholdMs ?? 120000,
-    lifecycleState: overrides?.lifecycleState ?? { get: () => "unknown" as const, set: () => undefined },
   };
 }
 
@@ -187,71 +179,5 @@ describe("ServerStartedHandler", () => {
     await h.handle(fakeContext(publisher), eventB);
 
     expect(publisher.publish.mock.calls[0]![0]).toEqual(publisher.publish.mock.calls[1]![0]);
-  });
-
-  // ---------- lifecycle state (BUG-02C · defense-in-depth) ----------
-
-  it("estado=up + start fresco: NO publica + WARN duplicado_lifecycle", async () => {
-    const publisher = fakePublisher();
-    const warn = vi.fn();
-    let current: "unknown" | "up" | "down" = "up";
-    const lifecycleState = {
-      get: () => current,
-      set: (n: "unknown" | "up" | "down") => {
-        current = n;
-      },
-    };
-    const h = new ServerStartedHandler();
-    const event: EventRecord = {
-      ...fakeEvent("server.start"),
-      ts: "2026-08-02T07:00:00.000Z",
-      received_at: "2026-08-02T07:00:00.500Z",
-    };
-    await h.handle(fakeContext(publisher, { warn, lifecycleState }), event);
-    expect(publisher.publish).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledTimes(1);
-    const payload = warn.mock.calls[0]![0] as Record<string, unknown>;
-    expect(payload.motivo).toBe("duplicado_lifecycle");
-    expect(payload.prior_state).toBe("up");
-  });
-
-  it("start fresco cuando estado != up: publica y transiciona a 'up'", async () => {
-    const publisher = fakePublisher();
-    let current: "unknown" | "up" | "down" = "down";
-    const lifecycleState = {
-      get: () => current,
-      set: (n: "unknown" | "up" | "down") => {
-        current = n;
-      },
-    };
-    const h = new ServerStartedHandler();
-    const event: EventRecord = {
-      ...fakeEvent("server.start"),
-      ts: "2026-08-02T07:00:00.000Z",
-      received_at: "2026-08-02T07:00:00.500Z",
-    };
-    await h.handle(fakeContext(publisher, { lifecycleState }), event);
-    expect(publisher.publish).toHaveBeenCalledTimes(1);
-    expect(current).toBe("up");
-  });
-
-  it("start fresco desde 'unknown' publica y transiciona a 'up'", async () => {
-    const publisher = fakePublisher();
-    let current: "unknown" | "up" | "down" = "unknown";
-    const lifecycleState = {
-      get: () => current,
-      set: (n: "unknown" | "up" | "down") => {
-        current = n;
-      },
-    };
-    const h = new ServerStartedHandler();
-    const event: EventRecord = {
-      ...fakeEvent("server.start"),
-      ts: "2026-08-02T07:00:00.000Z",
-      received_at: "2026-08-02T07:00:00.500Z",
-    };
-    await h.handle(fakeContext(publisher, { lifecycleState }), event);
-    expect(publisher.publish).toHaveBeenCalledTimes(1);
-    expect(current).toBe("up");
   });
 });

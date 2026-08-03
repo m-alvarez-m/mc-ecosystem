@@ -15,12 +15,6 @@ import { computeLagMs, isFreshEvent } from "./freshness";
 // servidor arriba porque el plugin `storeDurable` reentrego un
 // server.stop de la sesion anterior. Descarta obsoletos silenciosamente
 // para bloquear ese modo de fallo.
-//
-// Defense-in-depth (BUG-02C): tras el chequeo de frescura, se consulta
-// la maquina de estados `context.lifecycleState` para evitar publicar
-// un DUPLICADO fresco:
-//   - si el estado ya es "down", no publica y emite WARN "duplicado".
-//   - si el estado es "unknown" o "up", publica y transiciona a "down".
 
 const EVENT_TYPE = "server.stop";
 
@@ -52,28 +46,10 @@ export class ServerStoppedHandler implements EventHandler {
       );
       return;
     }
-    const priorState = context.lifecycleState.get();
-    if (priorState === "down") {
-      context.logger.warn(
-        {
-          event_uuid: event.event_uuid,
-          id: event.id,
-          type: event.type,
-          handler: "ServerStoppedHandler",
-          ts: event.ts,
-          received_at: event.received_at,
-          prior_state: priorState,
-          motivo: "duplicado_lifecycle",
-        },
-        "server.stop duplicado (estado ya DOWN): no se publica en Discord",
-      );
-      return;
-    }
     await context.publisher.publish({
       title: TITLE,
       body: BODY,
       kind: "server_stopped",
     });
-    context.lifecycleState.set("down");
   }
 }

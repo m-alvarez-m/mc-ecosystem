@@ -14,16 +14,10 @@ import { computeLagMs, isFreshEvent } from "./freshness";
 // no anunciar un arranque que ocurrio hace horas. El evento sigue en
 // el Event Store; el cursor avanza igual.
 //
-// Defense-in-depth (BUG-02C): tras el chequeo de frescura, se consulta
-// la maquina de estados `context.lifecycleState` para evitar publicar
-// un DUPLICADO fresco:
-//   - si el estado ya es "up", no publica y emite WARN "duplicado".
-//   - si el estado es "unknown" o "down", publica y transiciona a "up".
-//
 // El handler SOLO depende de context.publisher (interfaz Publisher) y,
-// para la validacion de frescura, de context.logger + freshnessThresholdMs
-// + lifecycleState. No conoce Discord, no conoce Minecraft, no conoce
-// el Dispatcher ni el Polling Engine.
+// para la validacion de frescura, de context.logger + freshnessThresholdMs.
+// No conoce Discord, no conoce Minecraft, no conoce el Dispatcher ni
+// el Polling Engine.
 
 const EVENT_TYPE = "server.start";
 
@@ -56,28 +50,10 @@ export class ServerStartedHandler implements EventHandler {
       );
       return;
     }
-    const priorState = context.lifecycleState.get();
-    if (priorState === "up") {
-      context.logger.warn(
-        {
-          event_uuid: event.event_uuid,
-          id: event.id,
-          type: event.type,
-          handler: "ServerStartedHandler",
-          ts: event.ts,
-          received_at: event.received_at,
-          prior_state: priorState,
-          motivo: "duplicado_lifecycle",
-        },
-        "server.start duplicado (estado ya UP): no se publica en Discord",
-      );
-      return;
-    }
     await context.publisher.publish({
       title: TITLE,
       body: BODY,
       kind: "server_started",
     });
-    context.lifecycleState.set("up");
   }
 }

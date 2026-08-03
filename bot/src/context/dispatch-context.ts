@@ -1,7 +1,6 @@
 import type { Logger } from "pino";
 import type { Publisher } from "../publisher";
 import type { PlayerNameResolver } from "../players";
-import type { LifecycleStateStore } from "../handlers/lifecycle-state";
 
 // Contexto compartido que el dispatcher entrega a cada handler.
 //
@@ -24,16 +23,10 @@ import type { LifecycleStateStore } from "../handlers/lifecycle-state";
 //   de estado (BUG-02A) sí.
 // - `freshnessThresholdMs`: umbral que los handlers de estado usan
 //   para decidir si publicar. Configurado por env (default 120000 ms).
-// - `lifecycleState`: maquina de estados en memoria server-wide
-//   (unknown/up/down) que los handlers `ServerStartedHandler` y
-//   `ServerStoppedHandler` consultan para no publicar duplicados
-//   FRESCOS del mismo tipo (defense-in-depth sobre freshness).
-//   Ver BUG-02C y handlers/lifecycle-state.ts.
 
 export interface DispatchContext {
   publisher: Publisher;
   playerNameResolver: PlayerNameResolver;
   logger: Pick<Logger, "warn">;
   freshnessThresholdMs: number;
-  lifecycleState: LifecycleStateStore;
 }

@@ -21,21 +21,13 @@ const NEVER_CALLED_RESOLVER = {
 
 function fakeContext(
   publisher: Publisher,
-  overrides?: {
-    warn?: (obj: unknown, msg?: string) => void;
-    freshnessThresholdMs?: number;
-    lifecycleState?: {
-      get: () => "unknown" | "up" | "down";
-      set: (n: "unknown" | "up" | "down") => void;
-    };
-  },
+  overrides?: { warn?: (obj: unknown, msg?: string) => void; freshnessThresholdMs?: number },
 ): DispatchContext {
   return {
     publisher,
     playerNameResolver: NEVER_CALLED_RESOLVER,
     logger: { warn: overrides?.warn ?? (() => undefined) },
     freshnessThresholdMs: overrides?.freshnessThresholdMs ?? 120000,
-    lifecycleState: overrides?.lifecycleState ?? { get: () => "unknown" as const, set: () => undefined },
   };
 }
 
@@ -183,72 +175,5 @@ describe("ServerStoppedHandler", () => {
     expect(publisher.publish.mock.calls[0]![0]).toEqual(
       publisher.publish.mock.calls[1]![0],
     );
-  });
-
-  // ---------- lifecycle state (BUG-02C · defense-in-depth) ----------
-
-  it("estado=down + stop fresco: NO publica + WARN duplicado_lifecycle", async () => {
-    const publisher = fakePublisher();
-    const warn = vi.fn();
-    let current: "unknown" | "up" | "down" = "down";
-    const lifecycleState = {
-      get: () => current,
-      set: (n: "unknown" | "up" | "down") => {
-        current = n;
-      },
-    };
-    const h = new ServerStoppedHandler();
-    const event: EventRecord = {
-      ...fakeEvent("server.stop"),
-      ts: "2026-08-02T07:00:00.000Z",
-      received_at: "2026-08-02T07:00:00.500Z",
-    };
-    await h.handle(fakeContext(publisher, { warn, lifecycleState }), event);
-    expect(publisher.publish).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalledTimes(1);
-    const payload = warn.mock.calls[0]![0] as Record<string, unknown>;
-    expect(payload.motivo).toBe("duplicado_lifecycle");
-    expect(payload.prior_state).toBe("down");
-  });
-
-  it("stop fresco cuando estado != down: publica y transiciona a 'down'", async () => {
-    const publisher = fakePublisher();
-    let current: "unknown" | "up" | "down" = "up";
-    const lifecycleState = {
-      get: () => current,
-      set: (n: "unknown" | "up" | "down") => {
-        current = n;
-      },
-    };
-    const h = new ServerStoppedHandler();
-    const event: EventRecord = {
-      ...fakeEvent("server.stop"),
-      ts: "2026-08-02T07:00:00.000Z",
-      received_at: "2026-08-02T07:00:00.500Z",
-    };
-    await h.handle(fakeContext(publisher, { lifecycleState }), event);
-    expect(publisher.publish).toHaveBeenCalledTimes(1);
-    expect(current).toBe("down");
-  });
-
-  it("stop obsoleto NO transiciona el estado (freshness gana antes)", async () => {
-    const publisher = fakePublisher();
-    let current: "unknown" | "up" | "down" = "up";
-    const lifecycleState = {
-      get: () => current,
-      set: (n: "unknown" | "up" | "down") => {
-        current = n;
-      },
-    };
-    const h = new ServerStoppedHandler();
-    const event: EventRecord = {
-      ...fakeEvent("server.stop"),
-      ts: "2026-08-01T09:08:32.427Z",
-      received_at: "2026-08-02T07:01:03.996Z", // ~22 h
-    };
-    await h.handle(fakeContext(publisher, { lifecycleState }), event);
-    expect(publisher.publish).not.toHaveBeenCalled();
-    // Estado permanece "up" — freshness descarto el evento antes.
-    expect(current).toBe("up");
   });
 });

@@ -39,8 +39,7 @@ function fakeContext(
   publisher: Publisher,
   resolver: PlayerNameResolver,
 ): DispatchContext {
-  return { publisher, playerNameResolver: resolver, logger: { warn: () => undefined }, freshnessThresholdMs: 120000,
-      lifecycleState: { get: () => "unknown" as const, set: () => undefined }, lifecycleState: { get: () => "unknown", set: () => undefined } };
+  return { publisher, playerNameResolver: resolver, logger: { warn: () => undefined }, freshnessThresholdMs: 120000 };
 }
 
 const KILLER = "00000000-0000-4000-8000-0000000000aa";

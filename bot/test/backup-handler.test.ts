@@ -21,8 +21,7 @@ const NEVER_CALLED_RESOLVER = {
 } as unknown as import("../src/players").PlayerNameResolver;
 
 function fakeContext(publisher: Publisher): DispatchContext {
-  return { publisher, playerNameResolver: NEVER_CALLED_RESOLVER, logger: { warn: () => undefined }, freshnessThresholdMs: 120000,
-      lifecycleState: { get: () => "unknown" as const, set: () => undefined }, lifecycleState: { get: () => "unknown", set: () => undefined } };
+  return { publisher, playerNameResolver: NEVER_CALLED_RESOLVER, logger: { warn: () => undefined }, freshnessThresholdMs: 120000 };
 }
 
 function backupEvent(

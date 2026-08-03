@@ -3,7 +3,6 @@ import { EventDispatcher } from "../src/dispatcher";
 import { ServerStartedHandler } from "../src/handlers/server-started-handler";
 import { ServerStoppedHandler } from "../src/handlers/server-stopped-handler";
 import type { DispatchContext } from "../src/context";
-import { createLifecycleStateStore } from "../src/handlers/lifecycle-state";
 import type { EventRecord } from "../src/eventstore";
 import type { PlayerNameResolver } from "../src/players";
 
@@ -30,7 +29,6 @@ function fakeContext(): DispatchContext & {
     } as unknown as PlayerNameResolver,
     logger,
     freshnessThresholdMs: 120_000,
-    lifecycleState: createLifecycleStateStore(),
   };
 }
 
