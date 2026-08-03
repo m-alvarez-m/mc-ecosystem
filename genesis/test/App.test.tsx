@@ -99,6 +99,39 @@ const SAMPLE_PLAYERS = {
   returningPlayers: "1",
 };
 
+// D5: fixture del timeline. Los eventos vienen ASC del API; el
+// componente los invierte para pintar el mas reciente arriba.
+const SAMPLE_TIMELINE = [
+  {
+    id: "100",
+    event_uuid: "00000000-0000-4000-8000-000000000100",
+    type: "server.start",
+    v: 1,
+    ts: "2026-08-02T07:00:00Z",
+    received_at: "2026-08-02T07:00:00Z",
+    player_uuid: null,
+    world: null,
+    x: null,
+    y: null,
+    z: null,
+    data: {},
+  },
+  {
+    id: "101",
+    event_uuid: "00000000-0000-4000-8000-000000000101",
+    type: "session.start",
+    v: 1,
+    ts: "2026-08-02T07:05:00Z",
+    received_at: "2026-08-02T07:05:00Z",
+    player_uuid: "71804e99-f2aa-32dc-bfcb-0ea5cfdda708",
+    world: null,
+    x: null,
+    y: null,
+    z: null,
+    data: {},
+  },
+];
+
 function stubFetchAll(): void {
   vi.stubGlobal(
     "fetch",
@@ -126,6 +159,14 @@ function stubFetchAll(): void {
           status: 200,
           json: async () => SAMPLE_PLAYERS,
           text: async () => JSON.stringify(SAMPLE_PLAYERS),
+        } as unknown as Response;
+      }
+      if (url.includes("/api/insight/events/timeline")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => SAMPLE_TIMELINE,
+          text: async () => JSON.stringify(SAMPLE_TIMELINE),
         } as unknown as Response;
       }
       return {
@@ -243,7 +284,7 @@ describe("Genesis · smoke (D4)", () => {
     ).toBe(true);
   });
 
-  it("error HTTP en TODAS las APIs: ambas secciones muestran alert + Reintentar", async () => {
+  it("error HTTP en TODAS las APIs: las tres secciones muestran alert + Reintentar", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -255,7 +296,8 @@ describe("Genesis · smoke (D4)", () => {
     );
     renderWithProviders();
     await waitFor(() => {
-      expect(screen.getAllByRole("alert")).toHaveLength(2);
+      // D5: Summary + Overview + Timeline → 3 secciones con ErrorState.
+      expect(screen.getAllByRole("alert")).toHaveLength(3);
     });
     expect(
       screen.getByText(/no se pudieron cargar los insights/i),
@@ -263,9 +305,12 @@ describe("Genesis · smoke (D4)", () => {
     expect(
       screen.getByText(/no se pudo cargar el resumen/i),
     ).toBeInTheDocument();
-    // 2 botones Reintentar (uno por seccion).
+    expect(
+      screen.getByText(/no se pudo cargar el timeline/i),
+    ).toBeInTheDocument();
+    // 3 botones Reintentar (uno por seccion).
     const retryBtns = screen.getAllByRole("button", { name: /reintentar/i });
-    expect(retryBtns).toHaveLength(2);
+    expect(retryBtns).toHaveLength(3);
     const callsBefore = (fetch as unknown as { mock: { calls: unknown[] } })
       .mock.calls.length;
     await userEvent.click(retryBtns[0]!);
@@ -307,6 +352,14 @@ describe("Genesis · smoke (D4)", () => {
             text: async () => JSON.stringify(SAMPLE_PLAYERS),
           } as unknown as Response;
         }
+        if (url.includes("/api/insight/events/timeline")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => SAMPLE_TIMELINE,
+            text: async () => JSON.stringify(SAMPLE_TIMELINE),
+          } as unknown as Response;
+        }
         return {
           ok: false,
           status: 404,
@@ -321,5 +374,45 @@ describe("Genesis · smoke (D4)", () => {
     });
     // El Summary sigue sano.
     expect(screen.getByTestId("summary-grid")).toBeInTheDocument();
+    // El Timeline también.
+    expect(screen.getByTestId("timeline-list")).toBeInTheDocument();
+  });
+
+  it("Timeline se pinta como tercera seccion (D5)", async () => {
+    renderWithProviders();
+    await waitFor(() => {
+      expect(screen.getByTestId("timeline-list")).toBeInTheDocument();
+    });
+    // Heading h2 Timeline visible.
+    expect(
+      screen.getByRole("heading", { level: 2, name: /^timeline$/i }),
+    ).toBeInTheDocument();
+    // 2 items en la muestra.
+    const list = screen.getByTestId("timeline-list");
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    // Titulos humanos aplicados.
+    expect(within(list).getByText("Servidor iniciado")).toBeInTheDocument();
+    expect(within(list).getByText("Jugador se conectó")).toBeInTheDocument();
+    // Orden: mas reciente arriba. session.start (07:05) va antes que
+    // server.start (07:00) en el DOM.
+    const items = within(list).getAllByRole("listitem");
+    expect(items[0]!.getAttribute("data-event-type")).toBe("session.start");
+    expect(items[1]!.getAttribute("data-event-type")).toBe("server.start");
+  });
+
+  it("fetch al timeline con limit=20 y ventana ISO", async () => {
+    renderWithProviders();
+    await waitFor(() => {
+      expect(screen.getByTestId("timeline-list")).toBeInTheDocument();
+    });
+    const calls = (fetch as unknown as { mock: { calls: [unknown][] } }).mock
+      .calls;
+    const timelineUrl = calls
+      .map((c) => String(c[0]))
+      .find((u) => u.includes("/api/insight/events/timeline"));
+    expect(timelineUrl).toBeDefined();
+    expect(timelineUrl).toContain("limit=20");
+    expect(timelineUrl).toMatch(/from=\d{4}-\d{2}-\d{2}T/);
+    expect(timelineUrl).toMatch(/to=\d{4}-\d{2}-\d{2}T/);
   });
 });
