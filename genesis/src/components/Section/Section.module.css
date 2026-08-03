@@ -1,0 +1,17 @@
+.root {
+  display: block;
+}
+
+/* Padding vertical de la seccion — separa bloques verticales del layout. */
+.paddingNone {
+  padding-block: 0;
+}
+.paddingSm {
+  padding-block: var(--gs-space-4);
+}
+.paddingMd {
+  padding-block: var(--gs-space-6);
+}
+.paddingLg {
+  padding-block: var(--gs-space-8);
+}

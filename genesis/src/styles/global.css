@@ -1,0 +1,25 @@
+/*
+ * Reglas globales que usan design tokens. Toca solo elementos raiz;
+ * nunca clases genericas. Los estilos por componente viven en su
+ * .module.css.
+ */
+
+body {
+  font-family: var(--gs-font-family-sans);
+  font-size: var(--gs-font-size-md);
+  line-height: var(--gs-line-height-normal);
+  color: var(--gs-color-text);
+  background-color: var(--gs-color-background);
+}
+
+/*
+ * Focus visible unificado: outline solido, con offset para separarlo
+ * del borde del elemento. Solo se muestra en navegacion por teclado
+ * (`:focus-visible`, no `:focus`), evitando anillos molestos al hacer
+ * click con el mouse.
+ */
+:focus-visible {
+  outline: 2px solid var(--gs-color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--gs-radius-sm);
+}

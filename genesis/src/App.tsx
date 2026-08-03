@@ -1,9 +1,29 @@
 import { Outlet } from "react-router-dom";
+import { AppLayout, Page, Content } from "./layout";
+import { Container } from "./components";
 
-// App layout raiz. En D1 es solo un shell: renderiza la ruta activa
-// via <Outlet />. El layout visual (sidebar, header, etc.) llegara
-// en D2 con el Design System.
+// App shell (D2). Envuelve la ruta activa en el esqueleto minimo
+// del Design System:
+//   AppLayout   -> fondo + color base
+//     Page      -> landmark <main>
+//       Container (wide)  -> centrado + max-width + padding responsive
+//         Content         -> gap uniforme entre bloques
+//           <Outlet/>     -> la pagina activa
+//
+// D2 no incluye sidebar / header / navegacion. Llegan cuando D4+ lo
+// requiera. El proof-of-life de D1 (`<pre>` con JSON) sigue vivo
+// como hijo de Outlet.
 
 export function App() {
-  return <Outlet />;
+  return (
+    <AppLayout>
+      <Page>
+        <Container size="wide">
+          <Content>
+            <Outlet />
+          </Content>
+        </Container>
+      </Page>
+    </AppLayout>
+  );
 }

@@ -1,0 +1,104 @@
+/*
+ * Genesis · Design System · CSS custom properties.
+ *
+ * Espejo declarativo de src/theme/tokens.ts. Los CSS Modules de
+ * componentes consumen `var(--gs-...)` y nunca hardcodean valores.
+ *
+ * Prefix `--gs-` (Genesis) para no colisionar con otros stylesheets
+ * globales si algun dia se integra un iframe o se sirve en un shell
+ * que ya define custom props.
+ */
+
+:root {
+  /* ---------- Colores neutrales ---------- */
+  --gs-color-neutral-50: #f7f8fa;
+  --gs-color-neutral-100: #eef0f4;
+  --gs-color-neutral-200: #e2e5eb;
+  --gs-color-neutral-300: #c9cfd8;
+  --gs-color-neutral-400: #9aa3b1;
+  --gs-color-neutral-500: #6b7280;
+  --gs-color-neutral-600: #4b5563;
+  --gs-color-neutral-700: #374151;
+  --gs-color-neutral-800: #1f2937;
+  --gs-color-neutral-900: #111827;
+
+  /* ---------- Colores semanticos ---------- */
+  --gs-color-primary: #2563eb;
+  --gs-color-primary-hover: #1d4ed8;
+  --gs-color-success: #16a34a;
+  --gs-color-warning: #d97706;
+  --gs-color-danger: #dc2626;
+  --gs-color-info: #0ea5e9;
+
+  /* ---------- Roles ---------- */
+  --gs-color-background: var(--gs-color-neutral-50);
+  --gs-color-surface: #ffffff;
+  --gs-color-surface-muted: var(--gs-color-neutral-100);
+  --gs-color-border: var(--gs-color-neutral-200);
+  --gs-color-border-strong: var(--gs-color-neutral-300);
+  --gs-color-text: var(--gs-color-neutral-900);
+  --gs-color-text-muted: var(--gs-color-neutral-600);
+  --gs-color-text-inverse: #ffffff;
+  --gs-color-focus-ring: var(--gs-color-primary);
+
+  /* ---------- Spacing ---------- */
+  --gs-space-0: 0;
+  --gs-space-1: 4px;
+  --gs-space-2: 8px;
+  --gs-space-3: 12px;
+  --gs-space-4: 16px;
+  --gs-space-5: 20px;
+  --gs-space-6: 24px;
+  --gs-space-8: 32px;
+  --gs-space-10: 40px;
+  --gs-space-12: 48px;
+  --gs-space-16: 64px;
+
+  /* ---------- Radius ---------- */
+  --gs-radius-none: 0;
+  --gs-radius-sm: 4px;
+  --gs-radius-md: 8px;
+  --gs-radius-lg: 12px;
+  --gs-radius-full: 9999px;
+
+  /* ---------- Typography ---------- */
+  --gs-font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --gs-font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, "Liberation Mono", monospace;
+
+  --gs-font-size-xs: 12px;
+  --gs-font-size-sm: 14px;
+  --gs-font-size-md: 16px;
+  --gs-font-size-lg: 18px;
+  --gs-font-size-xl: 20px;
+  --gs-font-size-2xl: 24px;
+  --gs-font-size-3xl: 30px;
+
+  --gs-font-weight-regular: 400;
+  --gs-font-weight-medium: 500;
+  --gs-font-weight-semibold: 600;
+  --gs-font-weight-bold: 700;
+
+  --gs-line-height-tight: 1.2;
+  --gs-line-height-normal: 1.5;
+  --gs-line-height-relaxed: 1.75;
+
+  /* ---------- zIndex ---------- */
+  --gs-z-base: 0;
+  --gs-z-content: 1;
+  --gs-z-header: 10;
+  --gs-z-overlay: 50;
+  --gs-z-modal: 100;
+  --gs-z-toast: 200;
+
+  /* ---------- Transitions ---------- */
+  --gs-duration-fast: 120ms;
+  --gs-duration-normal: 180ms;
+  --gs-duration-slow: 240ms;
+  --gs-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --gs-easing-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
+
+  /* ---------- Layout ---------- */
+  --gs-container-max-width: 1200px;
+}

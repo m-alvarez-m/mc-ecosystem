@@ -1,0 +1,11 @@
+.root {
+  flex: 1 1 auto;
+  display: block;
+  padding-block: var(--gs-space-6);
+}
+
+@media (min-width: 1024px) {
+  .root {
+    padding-block: var(--gs-space-8);
+  }
+}
