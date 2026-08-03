@@ -1,0 +1,105 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(17, 24, 39, 0.45);
+  z-index: var(--gs-z-overlay);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.panel {
+  position: relative;
+  background-color: var(--gs-color-surface);
+  width: min(100%, 480px);
+  height: 100%;
+  box-shadow: -8px 0 24px rgba(17, 24, 39, 0.12);
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gs-space-3);
+  padding: var(--gs-space-5) var(--gs-space-6);
+  border-bottom: 1px solid var(--gs-color-border);
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-1);
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--gs-font-size-xl);
+  font-weight: var(--gs-font-weight-semibold);
+  color: var(--gs-color-text);
+  line-height: var(--gs-line-height-tight);
+  overflow-wrap: anywhere;
+}
+
+.uuid {
+  color: var(--gs-color-text-muted);
+  font-family: var(--gs-font-family-mono);
+  font-size: var(--gs-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.body {
+  overflow-y: auto;
+  padding: var(--gs-space-5) var(--gs-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-6);
+  flex: 1 1 auto;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-2);
+}
+
+.blockLabel {
+  color: var(--gs-color-text-muted);
+  font-size: var(--gs-font-size-xs);
+  font-weight: var(--gs-font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.eventRef {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--gs-font-size-sm);
+}
+
+.eventType {
+  font-family: var(--gs-font-family-mono);
+  color: var(--gs-color-text);
+}
+
+.eventTs {
+  color: var(--gs-color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.totalRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--gs-space-3);
+}
+
+.totalValue {
+  font-size: var(--gs-font-size-2xl);
+  font-weight: var(--gs-font-weight-semibold);
+  color: var(--gs-color-text);
+  font-variant-numeric: tabular-nums;
+}

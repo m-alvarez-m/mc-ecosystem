@@ -1,0 +1,23 @@
+.root {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr max-content;
+  gap: var(--gs-space-1) var(--gs-space-4);
+  font-size: var(--gs-font-size-sm);
+}
+
+.type {
+  color: var(--gs-color-text);
+  font-family: var(--gs-font-family-mono);
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+
+.count {
+  color: var(--gs-color-text);
+  font-weight: var(--gs-font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  margin: 0;
+}

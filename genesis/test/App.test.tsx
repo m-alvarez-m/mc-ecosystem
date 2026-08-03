@@ -99,6 +99,20 @@ const SAMPLE_PLAYERS = {
   returningPlayers: "1",
 };
 
+// D6: fixture de /insight/players/top (listado de jugadores).
+const SAMPLE_TOP_PLAYERS = [
+  {
+    uuid: "71804e99-f2aa-32dc-bfcb-0ea5cfdda708",
+    name: "Vancorbus",
+    count: "12500",
+  },
+  {
+    uuid: "8a80a72d-fb01-3e17-9a96-2b801d16f82d",
+    name: "Elrid",
+    count: "800",
+  },
+];
+
 // D5: fixture del timeline. Los eventos vienen ASC del API; el
 // componente los invierte para pintar el mas reciente arriba.
 const SAMPLE_TIMELINE = [
@@ -151,6 +165,16 @@ function stubFetchAll(): void {
           status: 200,
           json: async () => SAMPLE_SERVER,
           text: async () => JSON.stringify(SAMPLE_SERVER),
+        } as unknown as Response;
+      }
+      // D6: /players/top DEBE ir antes que /players — 'players' es
+      // substring de 'players/top' y el primer match gana.
+      if (url.includes("/api/insight/players/top")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => SAMPLE_TOP_PLAYERS,
+          text: async () => JSON.stringify(SAMPLE_TOP_PLAYERS),
         } as unknown as Response;
       }
       if (url.includes("/api/insight/players")) {
@@ -296,8 +320,9 @@ describe("Genesis · smoke (D4)", () => {
     );
     renderWithProviders();
     await waitFor(() => {
-      // D5: Summary + Overview + Timeline → 3 secciones con ErrorState.
-      expect(screen.getAllByRole("alert")).toHaveLength(3);
+      // D6: Summary + Overview + Timeline + PlayersExplorer →
+      // 4 secciones con ErrorState.
+      expect(screen.getAllByRole("alert")).toHaveLength(4);
     });
     expect(
       screen.getByText(/no se pudieron cargar los insights/i),
@@ -308,9 +333,12 @@ describe("Genesis · smoke (D4)", () => {
     expect(
       screen.getByText(/no se pudo cargar el timeline/i),
     ).toBeInTheDocument();
-    // 3 botones Reintentar (uno por seccion).
+    expect(
+      screen.getByText(/no se pudo cargar la lista de jugadores/i),
+    ).toBeInTheDocument();
+    // 4 botones Reintentar (uno por seccion).
     const retryBtns = screen.getAllByRole("button", { name: /reintentar/i });
-    expect(retryBtns).toHaveLength(3);
+    expect(retryBtns).toHaveLength(4);
     const callsBefore = (fetch as unknown as { mock: { calls: unknown[] } })
       .mock.calls.length;
     await userEvent.click(retryBtns[0]!);
@@ -342,6 +370,14 @@ describe("Genesis · smoke (D4)", () => {
             status: 200,
             json: async () => SAMPLE_SERVER,
             text: async () => JSON.stringify(SAMPLE_SERVER),
+          } as unknown as Response;
+        }
+        if (url.includes("/api/insight/players/top")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => SAMPLE_TOP_PLAYERS,
+            text: async () => JSON.stringify(SAMPLE_TOP_PLAYERS),
           } as unknown as Response;
         }
         if (url.includes("/api/insight/players")) {
@@ -376,6 +412,31 @@ describe("Genesis · smoke (D4)", () => {
     expect(screen.getByTestId("summary-grid")).toBeInTheDocument();
     // El Timeline también.
     expect(screen.getByTestId("timeline-list")).toBeInTheDocument();
+    // El PlayersExplorer también.
+    expect(screen.getByTestId("players-grid")).toBeInTheDocument();
+  });
+
+  it("Players se pinta como cuarta sección con cards por jugador (D6)", async () => {
+    renderWithProviders();
+    await waitFor(() => {
+      expect(screen.getByTestId("players-grid")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("heading", { level: 2, name: /^players$/i }),
+    ).toBeInTheDocument();
+    const grid = screen.getByTestId("players-grid");
+    const items = within(grid).getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    // Nombres presentes.
+    expect(within(grid).getByText("Vancorbus")).toBeInTheDocument();
+    expect(within(grid).getByText("Elrid")).toBeInTheDocument();
+    // Cada card lleva su UUID en data-attr.
+    expect(
+      within(grid).getByRole("button", { name: /ver detalles de vancorbus/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(grid).getByRole("button", { name: /ver detalles de elrid/i }),
+    ).toBeInTheDocument();
   });
 
   it("Timeline se pinta como tercera seccion (D5)", async () => {
