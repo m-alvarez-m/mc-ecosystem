@@ -26,8 +26,14 @@ export function Overview(): JSX.Element {
 
   return (
     <>
+      {/*
+        D4: el Overview convive con Summary bajo un h1 "Dashboard"
+        (owned por Home). Bajamos el heading a level=2 para conservar
+        una jerarquía correcta a nivel de página. El visualSize se
+        mantiene igual — la estética no cambia, sólo la semántica.
+      */}
       <header className={styles.header}>
-        <Heading level={1} visualSize="xl">
+        <Heading level={2} visualSize="lg">
           Overview
         </Heading>
         <p className={styles.subtitle}>

@@ -1,0 +1,15 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gs-space-2);
+  padding: var(--gs-space-4);
+}
+
+/* Padding reducido respecto a Card default (space-6) para KPIs
+ * densos. Card sigue aportando bg + border + radius desde D2.
+ */
+
+.hint {
+  color: var(--gs-color-text-muted);
+  font-size: var(--gs-font-size-xs);
+}

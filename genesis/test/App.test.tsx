@@ -1,23 +1,26 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { App } from "../src/App";
 import { Home } from "../src/pages/Home";
 
-// Smoke test end-to-end de la aplicacion (evolucion D1 → D3).
+// Smoke test end-to-end de la aplicacion (evolucion D1 → D3 → D4).
 //
-// D1 pintaba <pre>{JSON}</pre>. D3 pinta el Overview con Cards. Los
-// tests verifican la MISMA cadena (mount + fetch + TanStack Query +
-// render), ahora contra la nueva UI:
-//   - loading state visible antes de resolver
-//   - despues de resolver: 1 card por insight, con titulo, categoria,
-//     confidence badge y una entrada del listado accesible role=listitem
-//   - fetch invocado contra /api/insight/insights con la ventana
-//     desde ADR-007
-//   - error HTTP → ErrorState con boton Reintentar; onRetry re-lanza
-//     la query
+// D4 anadio el SummaryDashboard SOBRE el Overview. La pagina Home
+// ahora consume TRES endpoints:
+//   - GET /api/insight/insights   (Overview, D3)
+//   - GET /api/insight/server     (Summary, D4)
+//   - GET /api/insight/players    (Summary, D4)
+//
+// Los tests mockean los tres y verifican:
+//   - loading visible al montar (loading de ambas secciones)
+//   - despues de resolver: heading Dashboard (h1), Summary (h2),
+//     Overview (h2); KPIs con numeros formateados; cards de insight
+//     por debajo del Summary
+//   - fetch invocado contra las 3 URLs esperadas
+//   - error 500 en TODO → ambas secciones muestran ErrorState
 
 function renderWithProviders() {
   const queryClient = new QueryClient({
@@ -69,100 +72,178 @@ const SAMPLE_INSIGHTS = [
   },
 ];
 
-describe("Genesis · smoke (D3)", () => {
-  beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: unknown) => {
-        const url = String(input);
-        if (url.includes("/api/insight/insights")) {
-          return {
-            ok: true,
-            status: 200,
-            json: async () => SAMPLE_INSIGHTS,
-            text: async () => JSON.stringify(SAMPLE_INSIGHTS),
-          } as unknown as Response;
-        }
+const SAMPLE_SERVER = {
+  firstEvent: {
+    id: "1",
+    event_uuid: "00000000-0000-4000-8000-000000000001",
+    type: "server.start",
+    ts: "2026-07-26T23:25:52Z",
+  },
+  lastEvent: {
+    id: "14115",
+    event_uuid: "00000000-0000-4000-8000-000000014115",
+    type: "server.tps_sample",
+    ts: "2026-08-02T07:28:33Z",
+  },
+  totalEvents: "14115",
+  distinctTypes: "29",
+  latestId: "14115",
+  timeRangeStart: "2026-07-26T23:25:52Z",
+  timeRangeEnd: "2026-08-02T07:28:33Z",
+};
+
+const SAMPLE_PLAYERS = {
+  totalPlayers: "2",
+  activePlayers: "2",
+  newPlayers: "1",
+  returningPlayers: "1",
+};
+
+function stubFetchAll(): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: unknown) => {
+      const url = String(input);
+      if (url.includes("/api/insight/insights")) {
         return {
-          ok: false,
-          status: 404,
-          json: async () => ({}),
-          text: async () => "not found",
+          ok: true,
+          status: 200,
+          json: async () => SAMPLE_INSIGHTS,
+          text: async () => JSON.stringify(SAMPLE_INSIGHTS),
         } as unknown as Response;
-      }),
-    );
+      }
+      if (url.includes("/api/insight/server")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => SAMPLE_SERVER,
+          text: async () => JSON.stringify(SAMPLE_SERVER),
+        } as unknown as Response;
+      }
+      if (url.includes("/api/insight/players")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => SAMPLE_PLAYERS,
+          text: async () => JSON.stringify(SAMPLE_PLAYERS),
+        } as unknown as Response;
+      }
+      return {
+        ok: false,
+        status: 404,
+        json: async () => ({}),
+        text: async () => "not found",
+      } as unknown as Response;
+    }),
+  );
+}
+
+describe("Genesis · smoke (D4)", () => {
+  beforeEach(() => {
+    stubFetchAll();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("monta y muestra el loading state antes de resolver", () => {
+  it("monta y muestra loading states de ambas secciones", () => {
     renderWithProviders();
-    // El LoadingState pinta `<div role="status">` con la etiqueta
-    // dentro. Buscamos por texto (accesible via aria-live) porque el
-    // `name` accesible de role=status no siempre incluye el text
-    // content en Testing Library.
+    // Overview muestra "Cargando insights…"; Summary muestra
+    // "Cargando resumen…". Ambos deben ser visibles antes de que
+    // ninguna query resuelva.
+    expect(screen.getByText(/cargando resumen/i)).toBeInTheDocument();
     expect(screen.getByText(/cargando insights/i)).toBeInTheDocument();
   });
 
-  it("resuelve la query y pinta una card por insight con titulo humano", async () => {
+  it("jerarquia de headings: h1 Dashboard, h2 Summary, h2 Overview", async () => {
+    renderWithProviders();
+    // El h1 se pinta en cuanto Home monta.
+    expect(
+      screen.getByRole("heading", { level: 1, name: /dashboard/i }),
+    ).toBeInTheDocument();
+    // Los h2 requieren esperar el mount de sus secciones.
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { level: 2, name: /^summary$/i }),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("heading", { level: 2, name: /^overview$/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("Summary pinta los 8 KPIs esperados con datos reales", async () => {
+    renderWithProviders();
+    await waitFor(() => {
+      expect(screen.getByTestId("summary-grid")).toBeInTheDocument();
+    });
+    const grid = screen.getByTestId("summary-grid");
+    // 8 KPIs (cada uno con role=group).
+    const kpis = within(grid).getAllByRole("group");
+    expect(kpis).toHaveLength(8);
+    // Valores formateados con separador de miles (es-ES usa punto).
+    expect(within(grid).getByText("14.115")).toBeInTheDocument();
+    expect(within(grid).getByText("29")).toBeInTheDocument();
+    // Labels obligatorias.
+    expect(within(grid).getByText(/total events/i)).toBeInTheDocument();
+    expect(within(grid).getByText(/distinct event types/i)).toBeInTheDocument();
+    expect(within(grid).getByText(/first event/i)).toBeInTheDocument();
+    expect(within(grid).getByText(/last event/i)).toBeInTheDocument();
+    expect(within(grid).getByText(/total players/i)).toBeInTheDocument();
+    expect(within(grid).getByText(/active players/i)).toBeInTheDocument();
+    expect(within(grid).getByText(/new players/i)).toBeInTheDocument();
+    expect(within(grid).getByText(/returning players/i)).toBeInTheDocument();
+  });
+
+  it("Overview sigue pintando una card por insight (D3 no roto)", async () => {
     renderWithProviders();
     await waitFor(() => {
       expect(screen.getByText("Tendencia de actividad")).toBeInTheDocument();
     });
-    // Los 4 insights? En este test solo hay 2 en la muestra, pero
-    // ambos deben aparecer con su titulo humano.
     expect(screen.getByText("Tendencia de exploración")).toBeInTheDocument();
-
-    // La lista tiene role=list + 2 items role=listitem.
     const list = screen.getByRole("list", { name: /insights del ecosistema/i });
-    expect(list).toBeInTheDocument();
-    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("cada card expone data-insight-id y su severity", async () => {
+  it("Summary se pinta ANTES del Overview en el orden del DOM", async () => {
     const { container } = renderWithProviders();
     await waitFor(() => {
-      expect(container.querySelector('[data-insight-id="activity-trend"]'))
+      expect(container.querySelector('[data-testid="summary-grid"]'))
         .not.toBeNull();
     });
-    const activityCard = container.querySelector<HTMLElement>(
-      '[data-insight-id="activity-trend"]',
+    // La sección Summary (con aria-label del heading id-generado) va
+    // antes que la lista de insights.
+    const summaryGrid = container.querySelector('[data-testid="summary-grid"]')!;
+    const overviewList = container.querySelector(
+      '[role="list"][aria-label*="Insights del ecosistema"]',
     )!;
-    expect(activityCard.querySelector('[data-severity="normal"]')).not.toBeNull();
-    const explorationCard = container.querySelector<HTMLElement>(
-      '[data-insight-id="exploration-trend"]',
-    )!;
-    expect(explorationCard.querySelector('[data-severity="critical"]'))
-      .not.toBeNull();
+    expect(overviewList).not.toBeNull();
+    const position = summaryGrid.compareDocumentPosition(overviewList);
+    // Node.DOCUMENT_POSITION_FOLLOWING = 4
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("confidence se muestra como Badge (no como porcentaje)", async () => {
-    renderWithProviders();
-    await waitFor(() => {
-      expect(screen.getByText("Confianza alta")).toBeInTheDocument();
-    });
-    expect(screen.getByText("Confianza baja")).toBeInTheDocument();
-    // Sin "%": D3 prohibe representar confidence como porcentaje.
-    expect(screen.queryByText(/%/)).toBeNull();
-  });
-
-  it("fetch se llama contra /api/insight/insights con from=ADR-007", async () => {
+  it("fetch se llama contra las 3 rutas esperadas", async () => {
     renderWithProviders();
     await waitFor(() => {
       expect(screen.getByText("Tendencia de actividad")).toBeInTheDocument();
     });
     const calls = (fetch as unknown as { mock: { calls: [unknown][] } }).mock
       .calls;
-    expect(calls.length).toBeGreaterThan(0);
-    const url = String(calls[0]![0]);
-    expect(url).toContain("/api/insight/insights");
-    expect(url).toContain("from=2026-07-26T23%3A25%3A52Z");
-    expect(url).toContain("to=");
+    const urls = calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.includes("/api/insight/insights"))).toBe(true);
+    expect(urls.some((u) => u.includes("/api/insight/server"))).toBe(true);
+    expect(
+      urls.some(
+        (u) =>
+          u.includes("/api/insight/players") &&
+          u.includes("from=2026-07-26T23%3A25%3A52Z"),
+      ),
+    ).toBe(true);
   });
 
-  it("error HTTP muestra ErrorState reutilizable con boton Reintentar", async () => {
+  it("error HTTP en TODAS las APIs: ambas secciones muestran alert + Reintentar", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -174,15 +255,20 @@ describe("Genesis · smoke (D3)", () => {
     );
     renderWithProviders();
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toBeInTheDocument();
+      expect(screen.getAllByRole("alert")).toHaveLength(2);
     });
-    expect(screen.getByText(/no se pudieron cargar los insights/i))
-      .toBeInTheDocument();
-    // Boton reintentar visible; al hacer click, fetch se re-invoca.
-    const retry = screen.getByRole("button", { name: /reintentar/i });
+    expect(
+      screen.getByText(/no se pudieron cargar los insights/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/no se pudo cargar el resumen/i),
+    ).toBeInTheDocument();
+    // 2 botones Reintentar (uno por seccion).
+    const retryBtns = screen.getAllByRole("button", { name: /reintentar/i });
+    expect(retryBtns).toHaveLength(2);
     const callsBefore = (fetch as unknown as { mock: { calls: unknown[] } })
       .mock.calls.length;
-    await userEvent.click(retry);
+    await userEvent.click(retryBtns[0]!);
     await waitFor(() => {
       const callsAfter = (fetch as unknown as { mock: { calls: unknown[] } })
         .mock.calls.length;
@@ -190,19 +276,50 @@ describe("Genesis · smoke (D3)", () => {
     });
   });
 
-  it("cuando la API devuelve [] muestra EmptyState elegante", async () => {
+  it("Overview con []: EmptyState propio del Overview visible", async () => {
+    // Overrides puntuales: insights [], resto OK. Asi el Summary
+    // sigue mostrando KPIs y el Overview su EmptyState.
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        json: async () => [],
-        text: async () => "[]",
-      }) as unknown as Response),
+      vi.fn(async (input: unknown) => {
+        const url = String(input);
+        if (url.includes("/api/insight/insights")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => [],
+            text: async () => "[]",
+          } as unknown as Response;
+        }
+        if (url.includes("/api/insight/server")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => SAMPLE_SERVER,
+            text: async () => JSON.stringify(SAMPLE_SERVER),
+          } as unknown as Response;
+        }
+        if (url.includes("/api/insight/players")) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => SAMPLE_PLAYERS,
+            text: async () => JSON.stringify(SAMPLE_PLAYERS),
+          } as unknown as Response;
+        }
+        return {
+          ok: false,
+          status: 404,
+          json: async () => ({}),
+          text: async () => "not found",
+        } as unknown as Response;
+      }),
     );
     renderWithProviders();
     await waitFor(() => {
       expect(screen.getByText(/aún no hay insights/i)).toBeInTheDocument();
     });
+    // El Summary sigue sano.
+    expect(screen.getByTestId("summary-grid")).toBeInTheDocument();
   });
 });

@@ -91,13 +91,14 @@ describe("Overview", () => {
     vi.unstubAllGlobals();
   });
 
-  it("pinta el heading 'Overview' y la ventana temporal", async () => {
+  it("pinta el heading 'Overview' (level=2 desde D4) y la ventana temporal", async () => {
     renderOverview();
-    // Heading nivel 1 con visualSize=xl.
+    // D4 bajó Overview a h2 para coexistir con el h1 "Dashboard" y
+    // el h2 "Summary" bajo la misma página. Mismo texto, misma
+    // ubicación visual — sólo cambia el nivel semántico.
     expect(
-      screen.getByRole("heading", { level: 1, name: /overview/i }),
+      screen.getByRole("heading", { level: 2, name: /overview/i }),
     ).toBeInTheDocument();
-    // La ventana aparece en el subtitle con el sufijo "Ventana:".
     expect(screen.getByText(/ventana:/i)).toBeInTheDocument();
   });
 
