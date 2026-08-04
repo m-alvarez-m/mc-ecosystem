@@ -579,6 +579,99 @@ Pasos:
    estilo *"GeoLite2 database updated"*. Si aparece *"invalid MaxMind
    credentials"*, revisar key/id.
 
+## Verificación de runtime tras un fix
+
+Regla institucional (ver **ADR-011**): ningún fix se considera cerrado
+hasta que un comando lea del artefacto en runtime y confirme que
+ejecuta el output del último commit. El código fuente no es
+autoritativo por sí solo — sólo lo que ya está cargado en el proceso
+determina el comportamiento observable.
+
+Origen de la regla: **BUG-02** tuvo tres intentos de corrección
+(02A/02B/02C) porque el fix mergeado en git nunca se rebuild en la
+imagen Docker del bot. La auditoría de 02C reveló que el runtime
+ejecutaba código anterior al fix. Mismo patrón que **ADR-007** con
+el plugin EventCollector, 3 semanas antes.
+
+Comandos exactos por tipo de servicio:
+
+### Servicios TS/Node en Docker (bot, api, futuros workers)
+
+```
+# Confirma que la imagen del contenedor corresponde al último build.
+docker image inspect <imagen> --format '{{.Created}} {{.Id}}'
+docker inspect <container> --format '{{.Image}}'
+# → los dos IDs deben coincidir.
+
+# Verifica que un símbolo del fix vive en el artefacto compilado.
+docker exec <container> sh -c 'grep -c <simbolo-del-fix> /app/dist/<ruta>'
+# → debe ser >= 1.
+```
+
+Ejemplo real (BUG-02C, verificación final):
+
+```
+$ docker exec mc-ecosystem-bot-1 sh -c \
+    'grep -c isFreshEvent /app/dist/handlers/server-stopped-handler.js'
+1
+$ docker image inspect mc-ecosystem-bot --format '{{.Created}}'
+2026-08-03T06:22:11Z
+```
+
+### SPA en Docker con nginx (genesis, dashboards)
+
+Vite hashea los assets por contenido. Si el hash del bundle no cambia
+tras un fix, el runtime sigue sirviendo el bundle anterior.
+
+```
+# Bundle activo en el navegador.
+curl -sI http://<host>:<puerto>/ | grep -i etag
+curl -s http://<host>:<puerto>/ | grep -oE 'assets/index-[^"]+\.js'
+
+# Confirma un símbolo del fix dentro del bundle servido.
+curl -s http://<host>:<puerto>/assets/<hash>.js | grep -c '<simbolo>'
+```
+
+### Plugin Java en Minecraft server
+
+El `.jar` copiado a `plugins/` no garantiza que el servidor lo cargó —
+Paper puede rechazar el jar (versión API incompatible, dependencia
+faltante) y seguir corriendo con el anterior o sin plugin.
+
+```
+# Fecha y presencia del jar en el filesystem del server.
+docker exec mc-ecosystem-minecraft-prod-1 ls -la /data/plugins/ | grep -i <plugin>
+
+# Versión que el server realmente cargó (via RCON).
+docker exec mc-ecosystem-minecraft-prod-1 rcon-cli plugins
+docker exec mc-ecosystem-minecraft-prod-1 rcon-cli version <PluginName>
+```
+
+### Config estática montada por bind mount
+
+```
+docker exec <container> md5sum /path/inside/container
+md5sum /path/on/host
+# → deben coincidir. Si difieren, el bind mount está sirviendo una
+#   ruta distinta o el archivo se editó dentro del contenedor.
+```
+
+### Regla operacional
+
+Al terminar un fix, incluir la línea de evidencia en el commit
+message o reporte final:
+
+```
+Runtime verification:
+  <comando exacto>
+  → <output que confirma el marcador>
+```
+
+Su ausencia es el olor que delata un fix "cerrado" que en realidad
+nunca corrió. Ver también **`start-mc.bat`** — usa
+`docker compose up -d --build` para el bot y demás servicios con
+código vivo del repo (aplicación operacional de ADR-011).
+
 ## Despliegues iniciales
 
 ### Despliegue inicial de EventCollector en prod — 2026-07-26
