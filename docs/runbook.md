@@ -672,6 +672,79 @@ nunca corrió. Ver también **`start-mc.bat`** — usa
 `docker compose up -d --build` para el bot y demás servicios con
 código vivo del repo (aplicación operacional de ADR-011).
 
+## CI · gates automáticos
+
+Definido en `.github/workflows/ci.yml`. Ampliación de la sección
+anterior: la **verificación de runtime** captura deploy drift
+(código correcto que no se cargó en el contenedor); **CI captura
+regresiones a nivel fuente** (código nuevo que rompe algo). Las
+dos son complementarias y ninguna sustituye a la otra.
+
+### Cuándo corre
+
+En cada `push` a la rama `main`. No se dispara por push a ramas
+secundarias ni por pull requests — el proyecto opera linealmente
+sobre `main`. Ampliar el trigger es one-liner en el YAML el día que
+se adopte flujo de branches.
+
+### Qué corre (5 jobs paralelos)
+
+| Job | Working dir | Comando(s) | Falla si |
+|---|---|---|---|
+| **plugin** | `plugin/` | `./gradlew build` | Compilación Java, tests MockBukkit, o Spotless fallan. |
+| **eventfx** | `eventfx/` | `./gradlew build` | Igual que plugin. |
+| **api** | `api/` | `npm ci` + `npm run typecheck` + `npm test` | `tsc --noEmit` reporta error, o `vitest run` falla. |
+| **bot** | `bot/` | `npm ci` + `npm run typecheck` + `npm test` | Igual que api. |
+| **genesis** | `genesis/` | `npm ci` + `npm run typecheck` + `npm test` | Igual, con `tsc -b --noEmit` (project references). |
+
+Los 5 corren en paralelo sobre `ubuntu-latest`. Duración típica:
+~2-4 min para el más lento (plugin/eventfx por Gradle). Cache de
+`~/.npm` y del wrapper de Gradle activo entre runs — segundos runs
+del mismo commit son mucho más rápidos.
+
+### Cómo interpretar fallos
+
+1. **Encontrar el run**: Actions tab del repo GitHub → columna
+   "CI" del commit rojo. La URL es
+   `https://github.com/<owner>/<repo>/actions/runs/<id>`.
+2. **Job en rojo**: click al job fallido. La UI muestra los pasos
+   con ✓/✗; el primer ✗ es la causa raíz.
+3. **Logs del step**: click al step ✗ → panel de output completo.
+   Los mensajes de `tsc` incluyen fichero:línea:columna; los de
+   `vitest` incluyen el describe/it y el assertion diff.
+
+### Reglas de higiene
+
+- **No mergees a `main` con CI en rojo.** El proyecto no tiene
+  branch protection habilitado hoy — depende de disciplina manual.
+  Si un push queda rojo, el siguiente commit debe arreglarlo antes
+  de continuar con features.
+- **CI no reemplaza el test local.** `npm test` en tu máquina
+  atrapa fallos en 2 s; CI tarda 3 min y consume minutos de
+  Actions gratis. Corre local primero, empuja segundo.
+- **CI no reemplaza la verificación de runtime.** Un run verde
+  significa "el código fuente compila y sus tests pasan". No
+  significa "la imagen Docker en prod ejecuta ese código". Ver la
+  sección **"Verificación de runtime tras un fix"** para el paso
+  complementario obligatorio.
+- **Actions minutes**: repos privados tienen cuota mensual limitada
+  (2.000 min/mes gratis). Con trigger `push: main` únicamente, el
+  gasto real es ≤1 ejecución por commit — muy holgado.
+
+### Añadir un job nuevo
+
+Cuando llegue un servicio nuevo con código vivo (worker de Insight,
+backend del dashboard, plugin adicional):
+
+1. Copiar uno de los jobs `api`/`bot`/`genesis` como plantilla.
+2. Ajustar `working-directory`, `cache-dependency-path` y el
+   comando de test.
+3. Correr `npm run typecheck && npm test` en local primero para
+   confirmar que los scripts existen y pasan.
+4. Añadir sección al runbook si el servicio tiene reglas de
+   operación propias (ver **"Operación de \<servicio\>"** cuando se
+   creen).
+
 ## Despliegues iniciales
 
 ### Despliegue inicial de EventCollector en prod — 2026-07-26
