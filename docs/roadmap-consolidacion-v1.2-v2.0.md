@@ -4,7 +4,7 @@ Duración estimada: 3-4 semanas de trabajo constante para llegar a v2.0 en produ
 FASE A — Cimientos operacionales
 Objetivo: convertir Pulso de "funciona" a "es robusto". Cerrar las 4 tareas críticas de v1.2.
 
-* A.1 · P2-4 CI (GitHub Actions). Alcance chico (~50-100 líneas YAML). Duración: 30-45 min.
+* A.1 · P2-4 CI (GitHub Actions). Alcance chico (~50-100 líneas YAML). Duración: 30-45 min. ✅ 2026-08-08 · commit `7d5a56a` · Actions run #109 verde (5 jobs OK, 1m 9s).
 * A.2 · P1-6 Retention policy + ADR-012. Alcance mediano (SQL + endpoint/cron + ADR + tests). Duración: 60-90 min.
 * A.3 · P1-5 Retry con circuit breaker + P2-5 Dead-letter queue. Alcance mediano combinado (~300-500 LOC). Duración: 90-120 min.
 
