@@ -799,6 +799,103 @@ checklist de nacimiento**. Si en el futuro el plugin se publica en
 Modrinth o similar, migrarlo al `PLUGINS` list del compose y retirar
 esta rugosidad manual.
 
+## Retención de events (política ADR-012)
+
+La tabla `events` está sujeta a la política de retención definida en
+`docs/adr/012-politica-retencion-events.md`. Ventana rodante de 24 meses,
+export mensual a Backblaze B2 con checkpoint SHA-256, purga sólo tras
+checksum verificado, 8 tipos de evento perpetuos. **Todo el subsistema
+está desplegado desde el 2026-08-08 en modo `EVENTS_PRUNE_DRY_RUN=true`**
+y así se mantiene hasta que el primer batch real esté por vencer
+(~2028-07). Durante ese tiempo el cron se ejercita mensualmente para
+prevenir bit-rot pero no sube nada ni borra nada.
+
+### Verificación de runtime tras deploy (ADR-011)
+
+Después de cualquier rebuild del contenedor `api`, verificar que el
+subsistema quedó cargado con las señales esperadas:
+
+```bash
+docker exec mc-ecosystem-api-1 sh -c \
+  'grep -c PERPETUAL_EVENT_TYPES /app/dist/prune/perpetual-types.js'
+# → 1 (constante presente en runtime)
+
+docker exec mc-ecosystem-api-1 printenv EVENTS_PRUNE_DRY_RUN
+# → true (default operativo del ADR-012 D5)
+
+docker exec mc-ecosystem-api-1 printenv DATABASE_URL_PRUNE | grep -o 'mc_pruner'
+# → mc_pruner (rol dedicado del ADR-012 D2)
+
+# Logs del scheduler al arrancar el api:
+docker logs mc-ecosystem-api-1 2>&1 | grep -i 'ADR-012'
+# → "ADR-012 · scheduler de retención activo"
+```
+
+Si el `printenv EVENTS_PRUNE_DRY_RUN` devuelve vacío o "false" sin que
+haya habido una decisión explícita del dueño, el deploy quedó
+desconfigurado: revertir antes de dejarlo correr solo.
+
+### Ejecución manual del prune (dry-run)
+
+El endpoint `POST /admin/events/prune` NO está expuesto al exterior
+(no hay ruta en cloudflared/playit hacia `/admin/*`). Se invoca
+desde dentro de la red interna de compose:
+
+```bash
+docker exec mc-ecosystem-api-1 sh -c \
+  'curl -s -X POST http://localhost:3000/admin/events/prune \
+     -H "X-Admin-Token: $ADMIN_PRUNE_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d "{}"'
+```
+
+Respuesta esperada en dry-run:
+
+```json
+{
+  "dry_run": true,
+  "results": [
+    { "period": "2024-08", "status": "dry_run", "row_count": 12345,
+      "size_bytes": 234567, "sha256_local": "…", "b2_object_key": "archive/events/events-2024-08.jsonl.gz" }
+  ]
+}
+```
+
+Para forzar un mes concreto (útil en tests): `-d '{"period":"2024-08"}'`.
+
+### Consultar la bitácora del archivado
+
+```bash
+docker exec mc-ecosystem-postgres-1 psql -U mc -d mc_ecosystem -c \
+  "SELECT period, status, row_count, size_bytes, archived_at, purged_at
+     FROM events_archive_log
+     ORDER BY archived_at DESC LIMIT 20;"
+```
+
+Los meses con `status='ok'` y `purged_at IS NOT NULL` están fuera de
+la base caliente. Los `status='dry_run'` son ejercitaciones sin
+efecto — presentes durante toda la ventana de activación segura.
+
+### Apagar dry-run cuando llegue el primer vencimiento real (~2028-07)
+
+1. Confirmar que `events_archive_log` tiene ≥12 filas con `status='dry_run'`
+   correlativas (código ejercitado mensualmente sin fallos).
+2. Confirmar que las credenciales B2 (`B2_ACCOUNT_ID`, `B2_ACCOUNT_KEY`)
+   siguen válidas — correr un backup regular y verificar en el panel B2.
+3. Editar `infra/.env` y cambiar `EVENTS_PRUNE_DRY_RUN=false`.
+4. `docker compose up -d --build api` (regla ADR-011 para propagar cambio
+   de env al runtime).
+5. Verificar con `printenv EVENTS_PRUNE_DRY_RUN → false`.
+6. Invocar el endpoint manualmente una vez ANTES de esperar al cron:
+   verifica el flujo completo real bajo supervisión humana.
+7. Revisar `events_archive_log` — debe aparecer una fila `status='ok'`
+   por cada mes vencido, y `SELECT count(*) FROM events` debe caer
+   proporcionalmente.
+
+Si algún paso falla, revertir a `EVENTS_PRUNE_DRY_RUN=true` y rebuild
+antes de investigar. La tabla `events_archive_log` es la fuente de
+verdad para diagnóstico — muestra qué se intentó y por qué falló.
+
 ## Historial de retiros
 
 Registro de componentes decommissioned tras alcanzar v1.0. La política es

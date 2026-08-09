@@ -5,7 +5,7 @@ FASE A — Cimientos operacionales
 Objetivo: convertir Pulso de "funciona" a "es robusto". Cerrar las 4 tareas críticas de v1.2.
 
 * A.1 · P2-4 CI (GitHub Actions). Alcance chico (~50-100 líneas YAML). Duración: 30-45 min. ✅ 2026-08-08 · commit `7d5a56a` · Actions run #109 verde (5 jobs OK, 1m 9s).
-* A.2 · P1-6 Retention policy + ADR-012. Alcance mediano (SQL + endpoint/cron + ADR + tests). Duración: 60-90 min.
+* A.2 · P1-6 Retention policy + ADR-012. Alcance mediano (SQL + endpoint/cron + ADR + tests). Duración: 60-90 min. ✅ 2026-08-08 · ADR-012 aprobado; migración `002_events_archive_log.sql`, módulo `src/prune/*`, endpoint `POST /admin/events/prune`, scheduler in-process (día 1 · 04:00 UTC), 24 tests nuevos (12 prune + 8 admin + 4 scheduler), deploy en modo `EVENTS_PRUNE_DRY_RUN=true` hasta ~2028-07.
 * A.3 · P1-5 Retry con circuit breaker + P2-5 Dead-letter queue. Alcance mediano combinado (~300-500 LOC). Duración: 90-120 min.
 
 Al cerrar Fase A: el bot resiste fallos silenciosos, la tabla events no crece infinita, cada commit posterior está validado por CI.

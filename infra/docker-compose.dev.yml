@@ -5,6 +5,26 @@ services:
       # La API SIEMPRE como mc_app (append-only); "postgres" es el
       # nombre del servicio vecino en la red interna de compose.
       DATABASE_URL: "postgresql://mc_app:${MC_APP_PASSWORD}@postgres:5432/mc_ecosystem"
+      # ADR-012 · Retención de events. mc_pruner es un rol separado con
+      # SELECT+DELETE sobre events (mc_app conserva su REVOKE DELETE).
+      # Si MC_PRUNER_PASSWORD no está en infra/.env, esta URL sigue
+      # renderizándose pero el módulo de prune fallará al arrancar —
+      # deliberado (ver src/prune/db.ts).
+      DATABASE_URL_PRUNE: "postgresql://mc_pruner:${MC_PRUNER_PASSWORD}@postgres:5432/mc_ecosystem"
+      # ADR-012 D5: dry-run ON por defecto operacional. El código de
+      # archivado se ejercita mensualmente pero NO sube nada a B2 ni
+      # borra filas hasta que el dueño flippee esto a "false".
+      EVENTS_PRUNE_DRY_RUN: "${EVENTS_PRUNE_DRY_RUN:-true}"
+      EVENTS_RETENTION_MONTHS: "${EVENTS_RETENTION_MONTHS:-24}"
+      # ADR-012 D3: endpoint POST /admin/events/prune. Sin token → 503.
+      ADMIN_PRUNE_TOKEN: "${ADMIN_PRUNE_TOKEN:-}"
+      # Credenciales de B2 (mismas que backup). Bucket y prefijo del
+      # ADR-012 D2. Si están vacías, el módulo funciona igual en
+      # dry-run pero un intento real falla explícitamente.
+      B2_ACCOUNT_ID: "${B2_ACCOUNT_ID:-}"
+      B2_ACCOUNT_KEY: "${B2_ACCOUNT_KEY:-}"
+      B2_BUCKET: "${B2_BUCKET:-mc-ecosystem-backups}"
+      B2_ARCHIVE_PREFIX: "${B2_ARCHIVE_PREFIX:-archive/events}"
     volumes:
       # Resource pack del Modo Evento, servido en GET /pack.zip.
       - ./resourcepack:/app/resourcepack:ro
