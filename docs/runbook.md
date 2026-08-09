@@ -896,6 +896,87 @@ Si algún paso falla, revertir a `EVENTS_PRUNE_DRY_RUN=true` y rebuild
 antes de investigar. La tabla `events_archive_log` es la fuente de
 verdad para diagnóstico — muestra qué se intentó y por qué falló.
 
+## Historial de incidentes
+
+Registro de incidentes en producción. Cada entrada captura contexto,
+causa raíz, detección y fix — y la lección estructural que motiva
+cambios en el sistema para evitar recurrencia. **Preferir escribir aquí
+poco pero útil** a escribir mucho y ritual: cada incidente que se
+documenta debe cambiar algo (proceso, código o arquitectura).
+
+### Incidente 001 · cursor del bot atascado por permisos Discord (2026-08-03 → 2026-08-09)
+
+**Contexto.** El `cursor.json` del bot Pulso (`infra/bot-data/cursor.json`)
+no avanzó del `event_id=14172` durante 6 días naturales. Los primeros
+5 días (2026-08-03 06:35 UTC → 2026-08-08 13:00 UTC) fueron **servidor
+Minecraft parado** — no entraron eventos nuevos, el cursor no tenía
+nada que procesar; el `updated_at` del cursor quedó estampado en el
+2026-08-03 porque fue la última vez que efectivamente avanzó. El
+**atasco real** empezó el 2026-08-08 13:05:35 UTC cuando llegó el
+`event_id=14173` (`type=backup.done`, `event_uuid=b6e93a41-1e9d-4dd0-9719-443caf701dbe`).
+
+**Causa raíz.** `DiscordAPIError[50013] Missing Permissions` del bot en
+el canal donde `BackupHandler` publica los eventos `backup.done`. El
+consumer lanzaba `PublishError` en cada intento; el `PollingEngine`,
+respetando su invariante at-least-once documentado
+(ver [bot/src/polling/polling-engine.ts](../bot/src/polling/polling-engine.ts),
+paso 5 de la secuencia y comentario "El cursor jamas se actualiza antes
+de que el callback termine OK"), **correctamente** no avanzaba el
+cursor. Reintentos cada ~5-30s durante ~28 horas: **500+ eventos**
+acumulados detrás del 14173. **No es bug de código; es configuración
+Discord** (permisos del bot en el canal target).
+
+**Detección.** Aparición **durante el diagnóstico previo a la
+implementación de ADR-013** (Fase A.3 del roadmap). Fue el propio
+chequeo de "¿cuál es el volumen del bot?" el que reveló que el cursor
+llevaba días congelado. El healthcheck del contenedor bot (`GET /health
+→ 200` cuando el cliente Discord está `ready`) reportó `healthy` todo
+el tiempo porque **el atasco ocurría en el consumer, invisible para el
+healthcheck actual** — que sólo mide conectividad con Discord, no
+capacidad efectiva de publicar en canales.
+
+**Fix aplicado (2026-08-09).**
+1. **Permisos corregidos por el dueño** en Discord: `Send Messages` +
+   `Embed Links` + `View Channel` en los canales target del bot.
+2. **Auto-recuperación**: al arreglar los permisos, el bot procesó los
+   ~500 pendientes en cadena sin intervención — el at-least-once del
+   engine se comportó como se esperaba y avanzó el cursor de `14172`
+   → `14832` (último id en el momento del fix). Los canales de Discord
+   recibieron una ráfaga de mensajes viejos (ruido efímero aceptable).
+3. **Skip clean del cursor**: descartado por innecesario tras la
+   auto-recuperación. Se registró como opción de contingencia en el
+   runbook por si volviera a hacer falta (`docker compose stop bot` →
+   editar `infra/bot-data/cursor.json` con `event_id` y `updated_at`
+   ISO-8601 → `docker compose start bot`).
+4. **Republicado selectivo**: no aplicado. Los eventos se republicaron
+   todos como parte de la auto-recuperación; no hubo pérdida de datos
+   (la tabla `events` es append-only por ADR-009, íntegra).
+
+**Aprendizaje que motiva ADR-013 (FASE A.3).** El patrón
+**retry-eterno-sin-backoff-ni-DLQ = atasco silencioso** que este
+incidente encarna es exactamente lo que ADR-013 va a cerrar. Cambios
+concretos derivados:
+
+- **Retry acotado con backoff exponencial + jitter**: cada evento
+  fallido reintenta N veces con delays crecientes; tras el tope, va a
+  la DLQ. Nunca más un evento monopolizando el consumer indefinidamente.
+- **Circuit breaker**: si un handler falla en tanda (N fallos en T
+  segundos), se abre el circuit y los eventos nuevos van a DLQ sin
+  intentar publicar. Se cierra automáticamente cuando pasa la ventana.
+- **Dead-letter queue** (`dead_letter_events` en Postgres): registro
+  auditable de qué se descartó y por qué. Endpoint `POST /admin/dlq/replay`
+  para reproducir manualmente cuando la causa raíz esté arreglada.
+- **Observabilidad estructurada**: cada intento fallido emite JSON line
+  con `correlation_id`, `attempt`, `error_type`, `circuit_state`. Un
+  `grep` sobre logs habría contado 500+ instancias del mismo `event_uuid`
+  y detectado el atasco en segundos, no en días.
+- **Nota abierta sobre healthchecks**: el `GET /health` actual del bot
+  mide conectividad con Discord, no capacidad de publicar. Un
+  healthcheck futuro debería incorporar "¿el cursor avanzó en las
+  últimas N horas de actividad esperada?" — queda anotado como
+  potencial trabajo post-A.3, no dentro de ADR-013 para no ampliar
+  scope.
+
 ## Historial de retiros
 
 Registro de componentes decommissioned tras alcanzar v1.0. La política es
