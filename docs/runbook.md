@@ -977,6 +977,109 @@ concretos derivados:
   potencial trabajo post-A.3, no dentro de ADR-013 para no ampliar
   scope.
 
+### Incidente 002 · EventFX no desplegado en prod (2026-08-09)
+
+**Contexto.** Descubierto el 2026-08-09 durante un intento del dueño
+de disparar `/evento iniciar <nombre>` (módulo Ki) en el servidor
+real. Minecraft devolvió `Comando desconocido o incompleto`. El
+plugin EventFX **jamás se cargó desde el nacimiento del mundo real**
+(2026-07-24, ADR-002); habían pasado ~46 días sin que nadie lo
+notara. Ninguna telemetría propia se pierde por este incidente:
+EventFX es puramente de gameplay/experiencia (skins, Herobrine
+haunting, secuencias dramáticas) y no captura datos que vayan a
+`events`.
+
+**Causa raíz.** El `.jar` compilado
+(`eventfx/build/libs/EventFX-0.1.0.jar`) **nunca se copió** al bind
+mount `world-genesis-v1-prod/plugins/`. Sólo su `config.yml` viajaba
+al contenedor via `COPY_CONFIG_DEST=/data` del compose, generando la
+carpeta `/data/plugins/EventFX/` con la config sin ningún jar
+adjunto. Paper arrancó sin registrar el plugin, sin errores
+observables en logs (silencio total salvo el `Interpolating` del
+config), y por tanto **los comandos `/evento` y `/haunt` no
+existían** en el runtime. La `whitelist` de plugins del compose
+(`PLUGINS: |`) sólo lista plugins upstream con URL — los propios
+del monorepo (EventCollector, EventFX) requieren copia manual del
+`.jar` al arranque.
+
+**Detección.** Intento del dueño de usar el módulo Ki tras semanas
+sin tocarlo. Antes de este intento **no había interacción con el
+plugin**, y por eso su ausencia fue invisible: el healthcheck del
+contenedor de Minecraft mide "servidor responde a ping", no
+"conjunto esperado de plugins cargados". Mismo antipatrón que el
+[Incidente 001](#incidente-001--cursor-del-bot-atascado-por-permisos-discord-2026-08-03--2026-08-09):
+el sistema estaba "verde" según su healthcheck pero funcionalmente
+degradado en una capa que el healthcheck no observa.
+
+**Patrón.** Tercera ocurrencia en el mismo servidor de la misma
+clase de fallo: **artefacto en runtime ≠ código en repo**. Los dos
+precedentes:
+
+- **ADR-007** (2026-07-24 → 2026-07-26): EventCollector no
+  desplegado durante los primeros ~63 h del mundo real. ~63 h de
+  gameplay sin telemetría (pérdida cero práctica sólo por suerte:
+  no hubo actividad real en ese intervalo).
+- **ADR-011 / BUG-02C** (2026-08-03): imagen Docker del bot
+  cacheada y previa al commit del fix `isFreshEvent`; el fix vivía
+  en git desde `5590cb8` pero el contenedor jamás lo ejecutó.
+  Se necesitó una tercera auditoría para aislar la brecha
+  código-runtime.
+
+El presente Incidente 002 es la primera vez que el mismo defecto
+aparece sobre un **plugin de Paper compilado localmente que no es
+EventCollector**. Confirma que la lección del ADR-007 se aplicó
+puntualmente a EventCollector, pero no se generalizó a "cualquier
+`.jar` propio del monorepo".
+
+**Fix aplicado (2026-08-09).**
+
+1. **Build limpio del jar**: `cd eventfx && ./gradlew build` →
+   `eventfx/build/libs/EventFX-0.1.0.jar` (68985 bytes).
+2. **Copy al bind mount**: `cp eventfx/build/libs/EventFX-0.1.0.jar
+   /c/Users/ADMIN/Documents/world-genesis-v1-prod/plugins/`.
+   Verificado con `ls -la` antes (5 jars) y después (6 jars, EventFX
+   incluido).
+3. **Restart**: `docker restart mc-ecosystem-minecraft-prod-1` +
+   espera a `health=healthy`.
+4. **Verificación runtime (ADR-011)** — logs post-restart mostraron:
+   ```
+   [EventFX] Loading server plugin EventFX v0.1.0
+   [EventFX] Enabling EventFX v0.1.0
+   [EventFX] Haunting: apagado (persistente; /haunt on|off)
+   [EventFX] EventFX activo. Pool de skins: 8 | duración: 300s
+             | ráfagas: cada 50s | endpoint: http://api:3000/events
+   ```
+   Y `rcon-cli plugins` → `Server Plugins (6): ..., EventFX, ...`
+   (EventFX en verde/enabled).
+5. **Comando correcto para el dueño**: `/evento iniciar <nombre>`
+   (falta el `<nombre>` en el intento original — la sintaxis exacta
+   está en `eventfx/src/main/resources/plugin.yml`).
+6. **Sin cambios en git**: el `.jar` es artefacto reproducible
+   desde el código versionado (mismo patrón que EventCollector,
+   `build/` gitignoreado). No se commitea el binario.
+
+**Aprendizaje que motivará ADR-014 (post-A.3).** El checklist de
+despliegue debe cubrir **todos** los plugins propios generados por
+Gradle en el monorepo, no sólo el de la última incidencia. Regla
+propuesta para el ADR-014:
+
+> Por cada `.jar` propio generado por Gradle en el monorepo
+> (`plugin/build/libs/`, `eventfx/build/libs/`, y cualquier futuro
+> subproyecto Gradle equivalente), existe un checkpoint automatizado
+> que verifica su presencia en el volumen de prod post-deploy o
+> post-nacimiento. La verificación puede ser un `docker exec ...
+> ls /data/plugins/` que compara contra una lista esperada
+> renderizada desde el mismo Gradle (ej. tarea `listExpectedPlugins`
+> que agrega los outputs de `:plugin:jar` y `:eventfx:jar`).
+
+Alternativas a considerar en el ADR-014: (a) `PLUGINS:` del compose
+apuntando a un servidor HTTP local (`packserver`) que sirva los
+`.jar`s del monorepo, (b) tarea de Gradle top-level `deployToProd`
+que copia todos los `.jar`s y valida, (c) sección obligatoria en el
+runbook de checklist post-arranque con `rcon plugins` como fuente
+de verdad. Cualquiera de las tres cierra la clase de fallo — la
+decisión concreta queda para su propio ADR.
+
 ## Historial de retiros
 
 Registro de componentes decommissioned tras alcanzar v1.0. La política es
