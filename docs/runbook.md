@@ -1080,6 +1080,86 @@ runbook de checklist post-arranque con `rcon plugins` como fuente
 de verdad. Cualquiera de las tres cierra la clase de fallo — la
 decisión concreta queda para su propio ADR.
 
+### Incidente 003 · Vancorbus no era OP en prod (2026-08-09, retroactivo desde 2026-07-26)
+
+**Contexto.** El jugador **Vancorbus** (dueño del servidor, UUID
+`71804e99-f2aa-32dc-bfcb-0ea5cfdda708`) **no estaba en `ops.json`**
+del mundo de producción desde el nacimiento del mundo real
+(2026-07-26). El archivo estuvo con contenido `[]` durante ~44 días
+sin que nadie lo notara — todo el juego cotidiano funciona sin OP,
+sólo los comandos administrativos (`/evento`, `/haunt`, `/gamemode`,
+`/give`, etc.) requieren el flag.
+
+**Causa raíz.** La **checklist de nacimiento del mundo real** (ver
+más arriba en este mismo runbook) no incluía "op al dueño" como
+paso explícito. Los pasos existentes cubren whitelist, secrets,
+configs, plugins — pero no OP. Vancorbus fue añadido a la whitelist
+(paso 5) y desde ahí pudo entrar a jugar, sin advertirse que jamás
+se ejecutó `op Vancorbus` en ninguna sesión posterior.
+
+**Detección.** Intento del dueño de disparar `/evento iniciar ki`
+el 2026-08-09 tras el fix del Incidente 002 (EventFX ya cargado y
+enabled). El cliente devolvió `Unknown command: /evento`. El
+`plugin.yml` de EventFX declara `permission: eventfx.admin` con
+`default: op`. Paper, por diseño, unifica "comando no existe" y
+"no tienes permiso" en el mismo mensaje al cliente para no filtrar
+existencia de comandos privilegiados. El comando SÍ llegaba al
+server (logs: `[04:52:01] Vancorbus issued server command: /evento
+iniciar ki`), el `CommandExecutor` de EventFX lo rechazaba por
+permiso, y el cliente veía "Unknown command".
+
+**Efectos colaterales del diagnóstico (meta-incidente).** Durante
+la investigación, el asistente (Claude Code) ejecutó
+`docker exec mc-ecosystem-minecraft-prod-1 rcon-cli 'op list'`
+creyendo que `op list` era un query de "listar operadores". En
+Minecraft **no existe query para `op`**: `op <nombre>` es siempre
+mutación. RCON interpretó el argumento como nombre de jugador y
+**creó un OP fantasma llamado "list"** (UUID offline-mode
+`15cb646e-6ebc-3fd7-9175-f565ad62ec3c`, level 4). El error se
+detectó de inmediato al leer `/data/ops.json` y se revirtió con
+`rcon-cli 'deop list'`. Impacto real cero: el ghost `list` no
+está en whitelist y por tanto no puede entrar al servidor. Impacto
+potencial: si hubiera habido una vulnerabilidad que permitiera
+saltarse la whitelist, ese ghost habría tenido OP total durante la
+ventana de ~1 min entre `op list` y `deop list`.
+
+**Fix aplicado (2026-08-09).**
+
+1. `docker exec ... rcon-cli 'deop list'` → `Made list no longer a
+   server operator`. `ops.json` volvió a `[]`.
+2. `docker exec ... rcon-cli 'op Vancorbus'` → `Made Vancorbus a
+   server operator`. `ops.json` ahora contiene exactamente una
+   entrada con el UUID canónico de Vancorbus (`71804e99-…`, mismo
+   que aparece en el histórico de `events` y en `test/*.ts` como
+   `PLAYER_UUID`) y `level: 4` (OP total).
+3. Regla operativa nueva guardada en memoria persistente del
+   asistente: **"op es mutación en Minecraft, nunca query. Para ver
+   OPs se lee `ops.json`. Los comandos de un verbo (`op`, `deop`,
+   `ban`, `whitelist add`) son siempre mutaciones."** Guarda para
+   sesiones futuras del asistente.
+
+**Aprendizaje que motivará ADR-014 (post-A.3).** La checklist de
+nacimiento del mundo real debe garantizar, como pasos explícitos
+verificables:
+
+- **OP del dueño** con `docker exec ... rcon-cli 'op <nombre>'` +
+  chequeo de `ops.json`.
+- **Presencia de todos los `.jar` propios del monorepo** en el
+  bind mount de prod (motivación del Incidente 002).
+- **Presencia y sintaxis correcta de todos los secretos** en
+  `infra/.env` — patrón `^VAR=` verificable con `grep -c` sin
+  exponer valores (mismo patrón que se aprendió en el Incidente
+  del rebuild del api en FASE A.3 con `MC_DLQ_PASSWORD` y
+  `ADMIN_DLQ_TOKEN` que quedaron mal formateados).
+
+Los tres huecos convergen en una misma causa estructural: **la
+checklist de nacimiento no se reinventó para v1.0** (heredó
+implícitamente lo de staging + añadidos ad-hoc). ADR-014 la
+reescribirá como el único documento normativo del "estado esperado"
+del mundo real, con comandos de verificación concretos y un check
+final `rcon plugins` + `cat ops.json` + `grep -c '^ADMIN_.*=' infra/.env`
+como cierre auditable.
+
 ## Historial de retiros
 
 Registro de componentes decommissioned tras alcanzar v1.0. La política es
