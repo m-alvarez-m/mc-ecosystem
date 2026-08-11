@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import { HandlerRegistry } from "./registry";
 import { HandlerExecutionError } from "./errors";
+import type { ResilientExecutor, ExecuteResult } from "../resilience";
 
 // EventDispatcher: recibe lotes de eventos del polling engine, los
 // enruta secuencialmente al handler correspondiente segun su `type`
@@ -59,6 +60,27 @@ export interface EventDispatcherOptions {
    * contrato defensivo.
    */
   onFailed?: OnHandlerFailedCallback;
+
+  /**
+   * Ejecutor resiliente (ADR-013). Si se provee, cada handler.handle()
+   * corre bajo retry + circuit breaker + DLQ + logging estructurado.
+   * Un handler que falla no aborta el lote — el evento va a DLQ y el
+   * dispatcher continúa con el siguiente. El cursor del polling
+   * engine avanza normalmente porque dispatch() no throw.
+   *
+   * Si NO se provee, el dispatcher mantiene el comportamiento
+   * histórico: cualquier fallo del handler propaga como
+   * HandlerExecutionError y aborta el lote (útil para tests y
+   * arranques sin subsistema de resiliencia configurado).
+   */
+  resilientExecutor?: ResilientExecutor;
+
+  /**
+   * Callback opcional invocado con el resultado del executor
+   * resiliente (éxito o DLQ). Uso: instrumentación / observabilidad.
+   * Sólo aplica cuando resilientExecutor está presente.
+   */
+  onExecuted?: (event: EventRecord, result: ExecuteResult) => void;
 }
 
 export class EventDispatcher {
@@ -67,12 +89,16 @@ export class EventDispatcher {
   private readonly onUnknown?: OnUnknownEventCallback;
   private readonly onHandled?: OnHandledEventCallback;
   private readonly onFailed?: OnHandlerFailedCallback;
+  private readonly resilientExecutor?: ResilientExecutor;
+  private readonly onExecuted?: (event: EventRecord, result: ExecuteResult) => void;
 
   constructor(options: EventDispatcherOptions) {
     this.context = options.context;
     this.onUnknown = options.onUnknown;
     this.onHandled = options.onHandled;
     this.onFailed = options.onFailed;
+    this.resilientExecutor = options.resilientExecutor;
+    this.onExecuted = options.onExecuted;
   }
 
   /** Registra `handler` bajo `eventType`. Ver HandlerRegistry.register. */
@@ -117,6 +143,46 @@ export class EventDispatcher {
         }
         continue;
       }
+      // Path resiliente (ADR-013): retry + breaker + DLQ absorben el
+      // fallo; dispatch() no throw y el cursor avanza aunque el
+      // evento acabe en DLQ. onFailed sigue notificando el error
+      // "de negocio" del último intento (opcional, no rompe el path).
+      if (this.resilientExecutor !== undefined) {
+        let lastErr: unknown = undefined;
+        const result = await this.resilientExecutor.execute(event, async () => {
+          try {
+            await handler.handle(this.context, event);
+          } catch (err) {
+            lastErr = err;
+            throw err;
+          }
+        });
+        if (result.outcome === "dlq" && this.onFailed !== undefined) {
+          try {
+            this.onFailed(event, lastErr ?? new Error(`circuit_open o DLQ · reason=${result.reason}`));
+          } catch {
+            /* swallow */
+          }
+        }
+        if (this.onExecuted !== undefined) {
+          try {
+            this.onExecuted(event, result);
+          } catch {
+            /* swallow */
+          }
+        }
+        if (result.outcome === "success" && this.onHandled !== undefined) {
+          try {
+            this.onHandled(event);
+          } catch {
+            /* swallow */
+          }
+        }
+        continue;
+      }
+
+      // Path histórico: sin resiliencia, cualquier fallo del handler
+      // aborta el lote y el polling engine no avanza el cursor.
       try {
         await handler.handle(this.context, event);
       } catch (err) {

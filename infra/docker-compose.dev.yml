@@ -25,6 +25,13 @@ services:
       B2_ACCOUNT_KEY: "${B2_ACCOUNT_KEY:-}"
       B2_BUCKET: "${B2_BUCKET:-mc-ecosystem-backups}"
       B2_ARCHIVE_PREFIX: "${B2_ARCHIVE_PREFIX:-archive/events}"
+      # ADR-013 · DLQ (dead_letter_events). mc_dlq es un rol separado
+      # con SELECT+INSERT+UPDATE sobre dead_letter_events. mc_app
+      # conserva sólo SELECT.
+      DATABASE_URL_DLQ: "postgresql://mc_dlq:${MC_DLQ_PASSWORD}@postgres:5432/mc_ecosystem"
+      # ADR-013 D8 · token SEPARADO del de prune. Sin él, el endpoint
+      # responde 503.
+      ADMIN_DLQ_TOKEN: "${ADMIN_DLQ_TOKEN:-}"
     volumes:
       # Resource pack del Modo Evento, servido en GET /pack.zip.
       - ./resourcepack:/app/resourcepack:ro
@@ -100,6 +107,10 @@ services:
       API_BASE_URL: "http://api:3000"
       CURSOR_FILE: "/app/data/cursor.json"
       PORT: "3001"
+      # ADR-013 · resiliencia. El bot deposita entradas en DLQ vía
+      # POST /admin/dlq usando este token (el mismo que el operador
+      # usa para /admin/dlq/replay — D8).
+      ADMIN_DLQ_TOKEN: "${ADMIN_DLQ_TOKEN:-}"
     volumes:
       # Datos persistentes del bot (cursor y todo lo que venga en el
       # futuro: cache, snapshots, wrapped, exports). Bind mount al

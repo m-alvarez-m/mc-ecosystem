@@ -12,6 +12,13 @@ import { RuntimeState } from "../observability";
 import { PlayerNameResolver } from "../players";
 import { PollingEngine } from "../polling";
 import {
+  CircuitBreaker,
+  DlqClient,
+  DlqMonitor,
+  ResilientExecutor,
+  StructuredErrorLogger,
+} from "../resilience";
+import {
   ServerStartedHandler,
   ServerStoppedHandler,
   PlayerJoinedHandler,
@@ -210,6 +217,40 @@ export function composeApp(config: Config): App {
     logger,
     freshnessThresholdMs: config.freshness.thresholdMs,
   };
+
+  // ADR-013 · Resiliencia. Se activa sólo si hay dlqToken en config.
+  // Sin token, el bot corre en modo histórico (ideal para tests
+  // locales sin infra de DLQ). El monitor se conserva desactivado.
+  let resilientExecutor: ResilientExecutor | undefined = undefined;
+  let dlqMonitor: DlqMonitor | null = null;
+  // Defensivo: config.resilience puede faltar en tests legacy que
+  // fabrican Config a mano sin la sección nueva del ADR-013. Cero
+  // resilience = modo histórico (comportamiento pre-A.3).
+  const resilienceCfg = config.resilience;
+  if (resilienceCfg !== undefined && resilienceCfg.dlqToken !== null) {
+    const dlqClient = new DlqClient({
+      baseUrl: config.eventStore.baseUrl,
+      adminToken: resilienceCfg.dlqToken,
+      timeoutMs: config.eventStore.timeoutMs,
+    });
+    const breaker = new CircuitBreaker();
+    const errorLogger = new StructuredErrorLogger(logger, resilienceCfg.botVersion);
+    resilientExecutor = new ResilientExecutor({
+      breaker,
+      dlq: dlqClient,
+      errorLogger,
+    });
+    dlqMonitor = new DlqMonitor({ client: dlqClient, logger });
+    logger.info(
+      { bot_version: resilienceCfg.botVersion },
+      "ADR-013 · resilience.executor_activo",
+    );
+  } else {
+    logger.warn(
+      "ADR-013 · ADMIN_DLQ_TOKEN ausente; retry+breaker+DLQ NO activos (modo histórico)",
+    );
+  }
+
   const dispatcher = new EventDispatcher({
     context,
     onUnknown: (event) => {
@@ -228,6 +269,15 @@ export function composeApp(config: Config): App {
         { err, type: event.type, event_uuid: event.event_uuid },
         "Handler fallido",
       );
+    },
+    resilientExecutor,
+    onExecuted: (event, result) => {
+      if (result.outcome === "dlq") {
+        logger.warn(
+          { event_uuid: event.event_uuid, type: event.type, reason: result.reason, attempts: result.attempts },
+          "ADR-013 · evento resuelto vía DLQ",
+        );
+      }
     },
   });
   for (const { eventType, handler } of createHandlerRegistrations(config)) {
@@ -286,6 +336,9 @@ export function composeApp(config: Config): App {
       // sembrar con MAX(id) actual para evitar reproceso masivo del
       // historial. Si falla, aborta el arranque.
       await seedInitialCursor({ cursorStore, eventStoreClient, logger });
+      // ADR-013 D7 · el monitor arranca haciendo un chequeo inmediato
+      // (log WARN si pending > 100) y luego cada 1h.
+      if (dlqMonitor !== null) dlqMonitor.start();
       await pollingEngine.start();
     },
     stop: async () => {
@@ -293,6 +346,7 @@ export function composeApp(config: Config): App {
       // trabajo (polling), luego cerramos el cliente Discord. Si
       // polling.stop() lanza, seguimos con destroy() igualmente.
       try {
+        if (dlqMonitor !== null) dlqMonitor.stop();
         await pollingEngine.stop();
       } finally {
         await client.destroy();

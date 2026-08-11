@@ -896,6 +896,118 @@ Si algún paso falla, revertir a `EVENTS_PRUNE_DRY_RUN=true` y rebuild
 antes de investigar. La tabla `events_archive_log` es la fuente de
 verdad para diagnóstico — muestra qué se intentó y por qué falló.
 
+## Resiliencia del bot (ADR-013)
+
+El bot Pulso incorpora **retry con backoff exponencial + circuit
+breaker + dead-letter queue** para asegurar que ningún fallo del
+downstream (Discord API caído, permisos rotos, rate limits) atasque
+el cursor indefinidamente — patrón que causó el
+[Incidente 001](#incidente-001--cursor-del-bot-atascado-por-permisos-discord-2026-08-03--2026-08-09).
+
+Documento normativo: `docs/adr/013-resiliencia-bot.md`. Esta sección
+del runbook cubre operación: cómo verificar que el subsistema corre y
+cómo usar el endpoint de replay.
+
+### Verificación de runtime tras deploy (ADR-011)
+
+```bash
+# 1. Tabla de la DLQ existe y tiene la UNIQUE(event_uuid, reason).
+docker exec mc-ecosystem-postgres-1 psql -U mc -d mc_ecosystem \
+  -c '\d dead_letter_events'
+
+# 2. Código del circuit breaker presente en runtime del bot.
+docker exec mc-ecosystem-bot-1 sh -c \
+  'grep -rc "circuit_state" /app/dist/resilience/ || true'
+# → ≥1
+
+# 3. Rol mc_dlq presente en el pool del api (URL con "mc_dlq").
+docker exec mc-ecosystem-api-1 sh -c 'printenv DATABASE_URL_DLQ | grep -o mc_dlq'
+# → mc_dlq
+
+# 4. Token administrativo separado del prune.
+docker exec mc-ecosystem-api-1 sh -c 'printenv ADMIN_DLQ_TOKEN | wc -c'
+# → 65 (64 hex chars + newline)
+
+# 5. Endpoint devuelve 401 con token bogus (auth activa).
+docker exec mc-ecosystem-api-1 sh -c \
+  'curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:3000/admin/dlq/replay \
+     -H "X-Admin-Token: bogus" -H "Content-Type: application/json" -d "{}"'
+# → 401
+
+# 6. Bot anuncia el executor activo al arrancar.
+docker logs mc-ecosystem-bot-1 2>&1 | grep -c 'resilience.executor_activo'
+# → 1
+```
+
+Si el bot NO tiene `ADMIN_DLQ_TOKEN` seteado en `bot/.env` (via
+`infra/.env`), el subsistema queda desactivado y el log emite
+`ADR-013 · ADMIN_DLQ_TOKEN ausente; retry+breaker+DLQ NO activos
+(modo histórico)`. Ese modo mantiene el comportamiento pre-A.3 (fallo
+del handler = cursor atascado). Poner el token en `.env` + rebuild
+del contenedor bot lo activa.
+
+### Consultar la DLQ
+
+```bash
+# Todo lo que hay, orden cronológico:
+docker exec mc-ecosystem-postgres-1 psql -U mc -d mc_ecosystem -c \
+  "SELECT id, event_uuid, reason, error_type, attempts, first_failed_at, replayed_at
+     FROM dead_letter_events
+     ORDER BY first_failed_at DESC LIMIT 20;"
+
+# Sólo pendientes (replayed_at IS NULL):
+docker exec mc-ecosystem-postgres-1 psql -U mc -d mc_ecosystem -c \
+  "SELECT count(*) FROM dead_letter_events WHERE replayed_at IS NULL;"
+```
+
+### Endpoint `POST /admin/dlq/replay`
+
+Reproduce entradas de la DLQ. **No expuesto públicamente** — sólo
+red interna de Docker Compose.
+
+```bash
+# Sin body: procesa todos los pendientes.
+docker exec mc-ecosystem-api-1 sh -c \
+  'curl -s -X POST http://localhost:3000/admin/dlq/replay \
+     -H "X-Admin-Token: $ADMIN_DLQ_TOKEN" \
+     -H "Content-Type: application/json" -d "{}"'
+
+# Sólo un id concreto:
+docker exec mc-ecosystem-api-1 sh -c \
+  'curl -s -X POST http://localhost:3000/admin/dlq/replay \
+     -H "X-Admin-Token: $ADMIN_DLQ_TOKEN" \
+     -H "Content-Type: application/json" -d "{\"id\": 42}"'
+
+# Filtrar por reason (útil tras un outage con circuit_open):
+#   -d "{\"reason\": \"circuit_open\"}"
+```
+
+**Estado actual del contrato**: la ruta acepta la autenticación y
+lista los candidatos que reproduciría, pero el **forwarding real al
+bot** (que ejecute el handler con el `event_payload` guardado) queda
+para una sesión posterior. Hasta entonces, la respuesta es
+`{replayed: 0, still_failing: [], candidates: [...], note: "..."}`.
+Un operador puede confirmar qué entradas se reproducirían antes de
+que el forwarding esté cableado.
+
+### Umbral de saturación (ADR-013 D7)
+
+El bot arranca chequeando `count(*) FROM dead_letter_events WHERE
+replayed_at IS NULL`; si > 100, emite un log `WARN
+resilience.dlq_saturated`. Se repite cada 1 h. No es un healthcheck
+que falla — sólo un aviso estructurado que un futuro sistema de
+alertas puede grep. Si el número crece de forma sostenida, revisar:
+
+1. Qué `reason` domina (`SELECT reason, count(*) FROM dead_letter_events
+   WHERE replayed_at IS NULL GROUP BY 1`).
+2. Si `circuit_open` domina: el downstream (Discord) tuvo un outage
+   sostenido — reproducir cuando esté sano.
+3. Si `max_retries` domina: bug en el handler o rate-limit persistente.
+4. Si `parse_error` domina: el plugin está emitiendo eventos con
+   forma inesperada — revisar `event_catalog.md` vs el evento
+   ofensor (`SELECT event_payload FROM dead_letter_events WHERE
+   reason = 'parse_error' ORDER BY first_failed_at DESC LIMIT 5`).
+
 ## Historial de incidentes
 
 Registro de incidentes en producción. Cada entrada captura contexto,

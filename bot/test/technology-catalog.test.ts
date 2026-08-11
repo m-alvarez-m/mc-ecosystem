@@ -119,7 +119,7 @@ describe("narrateTechnology · bloques en el catálogo", () => {
     ["minecraft:powered_rail", /🛤/, /transporte|raíles|distancias|carril|movimiento|rieles|viajes/i],
     ["minecraft:blast_furnace", /⚙/, /industria|producción|cadena|procesamiento|forja|especialización|estación/i],
     ["minecraft:sculk_sensor", /🔊/, /escuchar|sculk|pasos|biotecnología|silenciosa|atenta|oído|vibraciones|sentido/i],
-    ["minecraft:bookshelf", /📚/, /conocimiento|biblioteca|estantería|libros|preservar|cultura|estudio/i],
+    ["minecraft:bookshelf", /📚/, /conocimiento|biblioteca|estantería|libros|preservar|cultura|estudio|historia|rincón/i],
     ["minecraft:iron_door", /🔒/, /fortificación|defensa|hierro|puertas|seguridad|perímetro|accesos/i],
   ])(
     "block=%s produce body con emoji temático + palabras clave",

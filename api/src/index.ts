@@ -4,11 +4,13 @@ import { eventRoutes } from "./routes/events";
 import { playerRoutes } from "./routes/players";
 import { insightRoutes } from "./routes/insight";
 import { adminRoutes } from "./routes/admin";
+import { dlqRoutes } from "./routes/dlq";
 import { pool } from "./db";
 import { loadPruneConfig } from "./prune/config";
 import { createPrunePool } from "./prune/db";
 import { createB2Client, type B2Uploader } from "./prune/b2";
 import { startScheduler } from "./prune/scheduler";
+import { createDlqPool } from "./dlq/pool";
 
 // ajv-formats habilita los formatos "uuid" y "date-time" del esquema.
 // Los tipos de ajv-formats y fastify discrepan; el cast puntual es inocuo.
@@ -81,6 +83,26 @@ if (process.env.DATABASE_URL_PRUNE) {
   );
 } else {
   app.log.warn("ADR-012 · DATABASE_URL_PRUNE no definida; scheduler de retención NO activo");
+}
+
+// ADR-013 · DLQ (dead_letter_events). Se levanta el pool de mc_dlq
+// sólo si DATABASE_URL_DLQ está definida. El endpoint de replay usa
+// ADMIN_DLQ_TOKEN (variable NUEVA, distinta de ADMIN_PRUNE_TOKEN — D8).
+if (process.env.DATABASE_URL_DLQ) {
+  const dlqPool = createDlqPool();
+  const dlqAdminToken = process.env.ADMIN_DLQ_TOKEN ?? null;
+  app.register(dlqRoutes, {
+    dlqPool,
+    adminToken: dlqAdminToken,
+    // replayFn ausente → el endpoint lista candidatos sin re-emitir.
+    // El forwarding real al bot queda para una sesión posterior.
+  });
+  app.log.info(
+    { hasToken: dlqAdminToken !== null },
+    "ADR-013 · endpoints de DLQ activos"
+  );
+} else {
+  app.log.warn("ADR-013 · DATABASE_URL_DLQ no definida; endpoints de DLQ NO activos");
 }
 
 app.listen({ port: 3000, host: "0.0.0.0" }).catch((err) => {

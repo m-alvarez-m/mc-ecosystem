@@ -46,6 +46,19 @@ export interface Config {
      */
     thresholdMs: number;
   };
+  /**
+   * ADR-013 · Resiliencia (retry + circuit breaker + DLQ). Si
+   * `dlqToken` es null, el subsistema NO se activa: el dispatcher
+   * mantiene el comportamiento histórico (throw en handler failure).
+   * Diseño explícito para poder correr el bot en dev/test sin
+   * infra de DLQ.
+   */
+  resilience: {
+    dlqToken: string | null;
+    dlqInsertUrl: string; // baseUrl + "/admin/dlq"
+    dlqCountUrl: string; // baseUrl + "/admin/dlq/pending-count"
+    botVersion: string;
+  };
 }
 
 interface RequiredVar {
@@ -151,6 +164,21 @@ export function loadConfig(): Config {
     freshnessThresholdMs = parsed;
   }
 
+  // ADR-013 · Resiliencia. Token opcional: si no está seteado, el
+  // dispatcher sigue en modo histórico (fallo → throw → cursor
+  // atascado). Con token, el subsistema se activa (retry+breaker+DLQ).
+  const dlqToken = process.env.ADMIN_DLQ_TOKEN;
+  const resilience = {
+    dlqToken:
+      dlqToken !== undefined && dlqToken.trim().length > 0 ? dlqToken : null,
+    dlqInsertUrl: `${rawBaseUrl.replace(/\/+$/, "")}/admin/dlq`,
+    dlqCountUrl: `${rawBaseUrl.replace(/\/+$/, "")}/admin/dlq/pending-count`,
+    // Import perezoso desde package.json para no obligar a mantener
+    // la versión también aquí. Si el archivo cambia de path o formato,
+    // caemos a "unknown" en lugar de romper el arranque.
+    botVersion: readBotVersionSafe(),
+  };
+
   return {
     discord: {
       token: process.env.DISCORD_BOT_TOKEN!,
@@ -163,5 +191,16 @@ export function loadConfig(): Config {
     polling: { intervalMs: pollIntervalMs },
     tps: { alertThreshold: tpsAlertThreshold },
     freshness: { thresholdMs: freshnessThresholdMs },
+    resilience,
   };
+}
+
+function readBotVersionSafe(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pkg = require("../../package.json") as { version?: string };
+    return pkg.version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
 }
