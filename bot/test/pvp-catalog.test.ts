@@ -86,12 +86,21 @@ describe("narratePvpKill · categorías por weapon", () => {
     ["minecraft:splash_potion", /✨/, /Miguel/, /Carlos/],
     ["minecraft:cake", /⚔/, /Miguel/, /Carlos/], // → unknown → ⚔️
   ])(
-    "weapon=%s produce narración con emoji y ambos nombres interpolados",
+    "weapon=%s produce narración con emoji y ambos nombres interpolados (todas las variantes)",
     (weapon, emojiPattern, killerPattern, victimPattern) => {
-      const body = narratePvpKill({ killer: KILLER, victim: VICTIM, weapon });
-      expect(body).toMatch(emojiPattern);
-      expect(body).toMatch(killerPattern);
-      expect(body).toMatch(victimPattern);
+      // Refactor determinista: iteramos Math.random para forzar cada
+      // variante del pool y verificar que TODAS matcheen las 3 regex.
+      // Sin este loop el test es flaky (ver fix institucional en el
+      // runbook, sección post-FASE A). N=24 cubre pools de 6-8
+      // variantes exhaustivamente con margen para crecimiento.
+      for (let i = 0; i < 24; i++) {
+        vi.spyOn(Math, "random").mockReturnValue(i / 24);
+        const body = narratePvpKill({ killer: KILLER, victim: VICTIM, weapon });
+        expect(body, `variante i=${i}`).toMatch(emojiPattern);
+        expect(body, `variante i=${i}`).toMatch(killerPattern);
+        expect(body, `variante i=${i}`).toMatch(victimPattern);
+        vi.restoreAllMocks();
+      }
     },
   );
 

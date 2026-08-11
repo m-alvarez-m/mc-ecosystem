@@ -122,12 +122,21 @@ describe("narrateTechnology · bloques en el catálogo", () => {
     ["minecraft:bookshelf", /📚/, /conocimiento|biblioteca|estantería|libros|preservar|cultura|estudio|historia|rincón/i],
     ["minecraft:iron_door", /🔒/, /fortificación|defensa|hierro|puertas|seguridad|perímetro|accesos/i],
   ])(
-    "block=%s produce body con emoji temático + palabras clave",
+    "block=%s produce body con emoji temático + palabras clave (todas las variantes)",
     (block, emojiPattern, textPattern) => {
-      const body = narrateTechnology({ block });
-      expect(body).not.toBeNull();
-      expect(body!).toMatch(emojiPattern);
-      expect(body!).toMatch(textPattern);
+      // Refactor determinista: iteramos Math.random para forzar cada
+      // variante del pool y verificar que TODAS matcheen la regex.
+      // Sin este loop el test es flaky (ver fix institucional en el
+      // runbook, sección post-FASE A). N=24 cubre pools de 6-8
+      // variantes exhaustivamente con margen para crecimiento.
+      for (let i = 0; i < 24; i++) {
+        vi.spyOn(Math, "random").mockReturnValue(i / 24);
+        const body = narrateTechnology({ block });
+        expect(body, `variante i=${i}`).not.toBeNull();
+        expect(body!, `variante i=${i}`).toMatch(emojiPattern);
+        expect(body!, `variante i=${i}`).toMatch(textPattern);
+        vi.restoreAllMocks();
+      }
     },
   );
 

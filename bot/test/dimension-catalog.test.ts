@@ -25,12 +25,21 @@ describe("narrateDimension · dimensiones canónicas", () => {
     ["the_nether", /🔥/, /Nether|infierno|calor|expedición|portal|cielo/i],
     ["the_end", /👁/, /End|dragón|portal|capítulo final|visitante/i],
   ])(
-    "dimension=%s produce narración con emoji y nombre interpolado",
+    "dimension=%s produce narración con emoji y nombre interpolado (todas las variantes)",
     (dimension, emojiPattern, textPattern) => {
-      const body = narrateDimension({ playerName: NAME, dimension });
-      expect(body).toContain(NAME);
-      expect(body).toMatch(emojiPattern);
-      expect(body).toMatch(textPattern);
+      // Refactor determinista: iteramos Math.random para forzar cada
+      // variante del pool y verificar que TODAS matcheen la regex.
+      // Sin este loop el test es flaky (ver fix institucional en el
+      // runbook, sección post-FASE A). N=24 cubre pools de 6-8
+      // variantes exhaustivamente con margen para crecimiento.
+      for (let i = 0; i < 24; i++) {
+        vi.spyOn(Math, "random").mockReturnValue(i / 24);
+        const body = narrateDimension({ playerName: NAME, dimension });
+        expect(body, `variante i=${i}`).toContain(NAME);
+        expect(body, `variante i=${i}`).toMatch(emojiPattern);
+        expect(body, `variante i=${i}`).toMatch(textPattern);
+        vi.restoreAllMocks();
+      }
     },
   );
 });

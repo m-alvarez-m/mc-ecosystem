@@ -71,15 +71,28 @@ describe("narrateCraft · items en el catálogo", () => {
     ["minecraft:shulker_box", /🎒/, /organización|Shulker Box|base|inventario|logística|caos/i],
     ["minecraft:smithing_table", /🛠/, /Smithing|taller|forja|Netherite|smithing|mejoras/i],
     ["minecraft:anvil", /🔨/, /acero|Reparar|yunque|trabajo|mantenimiento|herramienta/i],
-    ["minecraft:lodestone", /🧭/, /exploración|referencia|Perderse|destino|brújula|viaje/i],
+    // "lugar" agregado para cubrir la variante "Ya existe un lugar
+    // que siempre podrá encontrarse." — sin él, el refactor
+    // determinista (todas las variantes) falla en i=4 del pool.
+    ["minecraft:lodestone", /🧭/, /exploración|referencia|Perderse|destino|brújula|viaje|lugar/i],
     ["minecraft:netherite_ingot", /⚒/, /Netherite|tecnología|futuro|equipo|herramientas|progreso/i],
   ])(
-    "item=%s produce narración con emoji y palabras clave del pool",
+    "item=%s produce narración con emoji y palabras clave del pool (todas las variantes)",
     (item, emojiPattern, textPattern) => {
-      const body = narrateCraft({ item });
-      expect(body).not.toBeNull();
-      expect(body!).toMatch(emojiPattern);
-      expect(body!).toMatch(textPattern);
+      // Refactor determinista: iteramos Math.random para forzar cada
+      // variante del pool y verificar que TODAS matcheen la regex.
+      // Sin este loop el test era flaky (una variante fuera de la
+      // regex compartida producía fallos ~1/N runs). N=24 cubre pools
+      // de 6-8 variantes con múltiples visitas exhaustivas y deja
+      // margen para futuros pools de hasta 24 variantes.
+      for (let i = 0; i < 24; i++) {
+        vi.spyOn(Math, "random").mockReturnValue(i / 24);
+        const body = narrateCraft({ item });
+        expect(body, `variante i=${i}`).not.toBeNull();
+        expect(body!, `variante i=${i}`).toMatch(emojiPattern);
+        expect(body!, `variante i=${i}`).toMatch(textPattern);
+        vi.restoreAllMocks();
+      }
     },
   );
 

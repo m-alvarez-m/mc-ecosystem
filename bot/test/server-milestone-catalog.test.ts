@@ -31,11 +31,20 @@ describe("narrateServerMilestone · hitos canónicos (6 what conocidos)", () => 
     ["wither", /☠/, /Wither|oscuridad|desafío|invocar|caos|paz terminó/i],
     ["ender_dragon", /🐉/, /Dragón|End|enemigo|historia|cielo|era/i],
   ])(
-    "what=%s produce narración con emoji y palabras clave",
+    "what=%s produce narración con emoji y palabras clave (todas las variantes)",
     (what, emojiPattern, textPattern) => {
-      const body = narrateServerMilestone({ what, playerName: "Miguel" });
-      expect(body).toMatch(emojiPattern);
-      expect(body).toMatch(textPattern);
+      // Refactor determinista: iteramos Math.random para forzar cada
+      // variante del pool y verificar que TODAS matcheen la regex.
+      // Sin este loop el test es flaky (ver fix institucional en el
+      // runbook, sección post-FASE A). N=24 cubre pools de 6-8
+      // variantes exhaustivamente con margen para crecimiento.
+      for (let i = 0; i < 24; i++) {
+        vi.spyOn(Math, "random").mockReturnValue(i / 24);
+        const body = narrateServerMilestone({ what, playerName: "Miguel" });
+        expect(body, `variante i=${i}`).toMatch(emojiPattern);
+        expect(body, `variante i=${i}`).toMatch(textPattern);
+        vi.restoreAllMocks();
+      }
     },
   );
 

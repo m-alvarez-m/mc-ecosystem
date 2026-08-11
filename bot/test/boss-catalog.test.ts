@@ -23,11 +23,20 @@ describe("narrateBossKill · bosses canónicos", () => {
     ["wither", /☠/, /Wither|caos|amenaza|monstruo|problema|oscuridad/i],
     ["ender_dragon", /🐉/, /Dragón|End|era|enemigo|batalla|silencio/i],
   ])(
-    "boss=%s produce narración con emoji y palabras clave",
+    "boss=%s produce narración con emoji y palabras clave (todas las variantes)",
     (boss, emojiPattern, textPattern) => {
-      const body = narrateBossKill({ boss, participants: [], extraCount: 0 });
-      expect(body).toMatch(emojiPattern);
-      expect(body).toMatch(textPattern);
+      // Refactor determinista: iteramos Math.random para forzar cada
+      // variante del pool y verificar que TODAS matcheen la regex.
+      // Sin este loop el test es flaky (ver fix institucional en el
+      // runbook, sección post-FASE A). N=24 cubre pools de 6-8
+      // variantes exhaustivamente con margen para crecimiento.
+      for (let i = 0; i < 24; i++) {
+        vi.spyOn(Math, "random").mockReturnValue(i / 24);
+        const body = narrateBossKill({ boss, participants: [], extraCount: 0 });
+        expect(body, `variante i=${i}`).toMatch(emojiPattern);
+        expect(body, `variante i=${i}`).toMatch(textPattern);
+        vi.restoreAllMocks();
+      }
     },
   );
 

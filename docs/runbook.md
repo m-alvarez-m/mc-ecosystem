@@ -1068,6 +1068,82 @@ formal y regla en memoria del asistente):
   post-A.3 para institucionalizar la checklist de despliegue de
   plugins propios + secretos + OP del dueño.
 
+### Fix post-FASE A · flakiness institucional en tests de catálogos (2026-08-11)
+
+**Descubrimiento.** Al monitorear el CI del commit de cierre oficial
+de FASE A (`097b094`) y del commit anterior (Incidente 003 docs),
+ambos aparecieron marcados **failure** con un test rojo en
+`bot/test/craft-catalog.test.ts` — específicamente el bloque
+parametrizado `describe("narrateCraft · items en el catálogo")` con
+la fila `["minecraft:lodestone", /🧭/, /exploración|referencia|
+Perderse|destino|brújula|viaje/i]`. El siguiente commit (69ede32,
+Vancorbus OP + ADR-014) volvió a pasar CI en verde. Diagnóstico
+inicial atribuido a suerte de RNG, confirmado en la revisión de
+código.
+
+**Causa raíz institucional.** Patrón compartido por 7 archivos de
+test de catálogos: `it.each([...regex compartida])(callback)` que
+llamaba `narrate*()` (que usa `Math.random()` sin seed para elegir
+variante del pool) **sin mockear `Math.random`** en el callback del
+`it.each`. Cada variante que no matcheara la regex compartida
+introducía una probabilidad de fallo por run igual a `1/pool_size`.
+El propio codebase demostraba conocer el idioma correcto —
+otras aserciones deterministas del mismo archivo hacen
+`vi.spyOn(Math, "random").mockReturnValue(0)` — pero el bloque
+parametrizado lo olvidó. **Bug latente desde el nacimiento de cada
+catálogo** (`git log -- <file>` = un solo commit por archivo).
+
+**Verificación de hermanos.** 11 archivos `bot/test/*catalog*.test.ts`
+revisados. Clasificación final:
+
+| Archivo | ¿Afectado? | Razón |
+|---|---|---|
+| `advancement-catalog.test.ts` | No | No usa `narrate*` con RNG |
+| `boss-catalog.test.ts` | **Sí** | it.each con textPattern, sin mock |
+| `craft-catalog.test.ts` | **Sí** (el que falló) | Además la regex del pool `LODESTONE` era insuficiente — no cubría la variante "🧭 Ya existe un lugar que siempre podrá encontrarse." |
+| `death-catalog.test.ts` | **Sí** (2 bloques: por cause y por killer_mob) | it.each con pattern, sin mock |
+| `dimension-catalog.test.ts` | **Sí** | it.each con textPattern, sin mock |
+| `exploration-catalog.test.ts` | No | Solo verifica emoji (siempre presente en el prefix del template) |
+| `progress-catalog.test.ts` | No | Solo verifica emoji |
+| `pvp-catalog.test.ts` | **Sí** | it.each con 3 patterns, sin mock |
+| `server-milestone-catalog.test.ts` | **Sí** | it.each con textPattern, sin mock |
+| `technology-catalog.test.ts` | **Sí** | it.each con textPattern, sin mock |
+| `villager-trade-catalog.test.ts` | No | Solo verifica emoji (2 bloques) |
+
+**Fix aplicado.** Refactor determinista (Opción b del diagnóstico)
+en los 7 archivos afectados, 8 bloques totales. Patrón mecánico
+homogéneo: el callback del `it.each` iteran `for (let i=0; i<24; i++)`
+con `vi.spyOn(Math, "random").mockReturnValue(i/24)` + `narrate*()` +
+las mismas aserciones + `vi.restoreAllMocks()` al final de cada
+iteración. `N=24` cubre exhaustivamente pools de 6-8 variantes (spec
+T13) con múltiples visitas por variante, y deja margen para pools
+futuros de hasta ~24 variantes sin cambiar el número.
+
+El refactor determinista **detectó de manera reproducible** el bug
+real que la flakiness ocultaba: la regex de LODESTONE no cubría la
+variante #1 del pool. Segunda parte del fix: ampliar la regex a
+`/…|viaje|lugar/i` (`lugar` es temática del lodestone — punto fijo
+en el mundo — y aparece en la variante afectada). **No se tocó
+ningún string creativo del pool ni código de producción del
+catálogo.** Solo tests.
+
+**Verificación.** 3 ejecuciones consecutivas de `npm test` en `bot/`
+tras el fix: **1123/1123 verdes en las 3** (duración ~2 s cada
+una). Los tests hermanos que ya pasaban por suerte ahora pasan por
+diseño — cualquier futura adición de variante que no matchee su
+regex compartida romperá el test de forma reproducible en `i=<índice>`
+en vez de cada N runs de CI.
+
+**Lección estructural.** Similar en espíritu a ADR-011 (runtime =
+código) y ADR-014 (checklist de nacimiento normativa): las
+aserciones probabilísticas ocultan bugs por suerte. El idioma
+`it.each + regex compartida contra pool aleatorio` sólo es válido
+si (a) se mockea el RNG a un valor determinista, o (b) se itera
+exhaustivamente sobre todos los valores del pool. La regla nueva
+guardada para futuros catálogos: **cualquier `it.each` que ejercite
+una función con RNG debe fijar el RNG (mock) o iterarlo (loop) —
+nunca dejar el resultado al azar del run de CI**.
+
 Próximo hito: **FASE B · Slash commands** (P2-1). Nada en FASE A
 queda a medias.
 

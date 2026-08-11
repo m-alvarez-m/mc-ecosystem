@@ -36,17 +36,26 @@ describe("narrateDeath · categorías reconocidas por cause", () => {
     ["hot_floor", /magma|Nether|suelas|brillante|caminar/i],
     ["lightning", /rayo|cielo|puntería|pararrayos|probabilidad/i],
     ["magic", /poción|química|efecto|etiqueta/i],
-  ])("cause=%s produce narración con nombre y palabras clave", (cause, pattern) => {
+  ])("cause=%s produce narración con nombre y palabras clave (todas las variantes)", (cause, pattern) => {
+    // Refactor determinista: iteramos Math.random para forzar cada
+    // variante del pool y verificar que TODAS matcheen la regex.
+    // Sin este loop el test es flaky (ver fix institucional en el
+    // runbook, sección post-FASE A). N=24 cubre pools de 6-8
+    // variantes exhaustivamente con margen para crecimiento.
     // Sin killer_mob: la clasificación cae por cause.
-    const body = narrateDeath({
-      playerName: NAME,
-      cause,
-      killerMob: null,
-      vanillaMessage: null,
-    });
-    expect(body).toContain(NAME);
-    expect(body).toMatch(pattern);
-    expect(body).toMatch(/^💀 /);
+    for (let i = 0; i < 24; i++) {
+      vi.spyOn(Math, "random").mockReturnValue(i / 24);
+      const body = narrateDeath({
+        playerName: NAME,
+        cause,
+        killerMob: null,
+        vanillaMessage: null,
+      });
+      expect(body, `variante i=${i}`).toContain(NAME);
+      expect(body, `variante i=${i}`).toMatch(pattern);
+      expect(body, `variante i=${i}`).toMatch(/^💀 /);
+      vi.restoreAllMocks();
+    }
   });
 });
 
@@ -62,18 +71,25 @@ describe("narrateDeath · categorías reconocidas por killer_mob", () => {
     ["minecraft:spider", /araña|antorchas|ojos|patas|cueva/i],
     ["minecraft:cave_spider", /araña|antorchas|ojos|patas|cueva/i],
     ["minecraft:enderman", /Enderman|mir|teletransporte|contacto/i],
-  ])("killer_mob=%s produce narración de la pool esperada", (mob, pattern) => {
+  ])("killer_mob=%s produce narración de la pool esperada (todas las variantes)", (mob, pattern) => {
+    // Refactor determinista: mismo patrón que el bloque anterior
+    // (ver comentario). Iteramos Math.random para verificar que TODAS
+    // las variantes del pool matcheen la regex compartida.
     // Aunque la cause sea genérica (entity_attack o projectile), el mob
     // decide la pool.
-    const body = narrateDeath({
-      playerName: NAME,
-      cause: "entity_attack",
-      killerMob: mob,
-      vanillaMessage: null,
-    });
-    expect(body).toContain(NAME);
-    expect(body).toMatch(pattern);
-    expect(body).toMatch(/^💀 /);
+    for (let i = 0; i < 24; i++) {
+      vi.spyOn(Math, "random").mockReturnValue(i / 24);
+      const body = narrateDeath({
+        playerName: NAME,
+        cause: "entity_attack",
+        killerMob: mob,
+        vanillaMessage: null,
+      });
+      expect(body, `variante i=${i}`).toContain(NAME);
+      expect(body, `variante i=${i}`).toMatch(pattern);
+      expect(body, `variante i=${i}`).toMatch(/^💀 /);
+      vi.restoreAllMocks();
+    }
   });
 });
 
