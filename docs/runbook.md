@@ -1008,6 +1008,69 @@ alertas puede grep. Si el número crece de forma sostenida, revisar:
    ofensor (`SELECT event_payload FROM dead_letter_events WHERE
    reason = 'parse_error' ORDER BY first_failed_at DESC LIMIT 5`).
 
+## Cierre de FASE A · Cimientos operacionales (2026-08-10)
+
+**Qué se logró.** Los tres sub-hitos de FASE A del roadmap
+(`docs/roadmap-consolidacion-v1.2-v2.0.md`) cerrados con evidencia
+end-to-end. Pulso pasó de "publica y reza" a "resiliente ante
+fallos, con historia auditable y sin crecimiento infinito".
+
+**Qué protege ahora el sistema.**
+
+- **A.1 · CI** (commit `7d5a56a`, run #109): cada push a `main`
+  ejecuta typecheck + tests en los 5 subproyectos (plugin,
+  eventfx, api, bot, genesis) en ubuntu-latest. Un fix mergeado
+  que rompe cualquier subproyecto marca el commit en rojo antes de
+  que se despliegue.
+- **A.2 · Retención `events`** (commit `c43d4ee`, ADR-012):
+  ventana rodante de 24 meses; los eventos vencidos se exportan
+  como JSONL gzipeado a B2 y se purgan sólo tras verificar
+  checksum SHA-256 remoto. 8 tipos perpetuos (deaths, kills,
+  hitos, milestones) jamás se archivan. Cron mensual (día 1 ·
+  04:00 UTC) + endpoint on-demand con token separado. Activo en
+  `DRY_RUN=true` hasta ~2028-07 para prevenir bit-rot del código
+  antes del primer batch real.
+- **A.3 · Resiliencia del bot** (commit `3fbc223`, ADR-013):
+  cada handler que falle se reintenta 5 veces con backoff
+  exponencial + jitter independiente (200 ms → 3.2 s ± 25%);
+  circuit breaker sliding window (5 fallos/60 s abre; half-open
+  con el próximo evento real); eventos irrecuperables van a
+  `dead_letter_events` con snapshot completo del payload (protege
+  contra la purga del A.2) y el cursor avanza — cero atascos
+  silenciosos. Endpoint `POST /admin/dlq/replay` para
+  reprocesar cuando la causa raíz se cure. Cierra estructuralmente
+  el [Incidente 001](#incidente-001--cursor-del-bot-atascado-por-permisos-discord-2026-08-03--2026-08-09).
+
+**Evidencia consolidada.**
+
+| Hito | Fecha | Commit | Prueba viva |
+|---|---|---|---|
+| A.1 | 2026-08-08 | `7d5a56a` | Actions run #109 (5 jobs, 1m 9s) |
+| A.2 | 2026-08-08 | `c43d4ee` | 24 tests nuevos verdes; `printenv EVENTS_PRUNE_DRY_RUN → true` en `api` |
+| A.3 | 2026-08-10 | `3fbc223` | Actions run 31460451382 (5 jobs verdes); log del bot `ADR-013 · resilience.executor_activo` con `bot_version:0.1.0`; endpoint responde 401 con token bogus |
+| **FASE A** | **2026-08-10** | **`3fbc223`** | **3/3 sub-hitos con CI verde y runtime verificado (ADR-011)** |
+
+**Aprendizajes documentados durante la fase** (todos con incidente
+formal y regla en memoria del asistente):
+
+- Nunca leer `.env` para verificar cambios del dueño — quema la
+  clave (registro histórico de rotaciones en la sección "Checklist
+  de nacimiento del mundo real" · item 1).
+- Migraciones SQL: commit local del `.sql` **antes** de aplicar al
+  Postgres vivo (lección de A.2 tras la primera migración que se
+  aplicó sin commitear; regla saved).
+- Comandos Minecraft de un verbo (`op`, `deop`, `ban`,
+  `whitelist add`) son SIEMPRE mutaciones — para ver ops se lee
+  `/data/ops.json` (regla derivada del meta-incidente durante el
+  diagnóstico del Incidente 003).
+- Config presente + jar ausente = plugin silenciosamente inexistente
+  (Incidente 002 · EventFX). Motiva la escritura de un ADR-014
+  post-A.3 para institucionalizar la checklist de despliegue de
+  plugins propios + secretos + OP del dueño.
+
+Próximo hito: **FASE B · Slash commands** (P2-1). Nada en FASE A
+queda a medias.
+
 ## Historial de incidentes
 
 Registro de incidentes en producción. Cada entrada captura contexto,

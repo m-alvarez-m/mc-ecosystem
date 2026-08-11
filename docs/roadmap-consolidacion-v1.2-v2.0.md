@@ -1,14 +1,14 @@
 Plan Consolidado — Cierre de v1.2 + v2.0 + Regreso al Roadmap
 Objetivo: consolidar los cimientos operacionales de Pulso, cerrar Genesis honestamente como v2.0 Insight, y volver al camino ordenado del roadmap original.
 Duración estimada: 3-4 semanas de trabajo constante para llegar a v2.0 en producción.
-FASE A — Cimientos operacionales
+FASE A ✅ — Cimientos operacionales (cerrada 2026-08-10)
 Objetivo: convertir Pulso de "funciona" a "es robusto". Cerrar las 4 tareas críticas de v1.2.
 
-* A.1 · P2-4 CI (GitHub Actions). Alcance chico (~50-100 líneas YAML). Duración: 30-45 min. ✅ 2026-08-08 · commit `7d5a56a` · Actions run #109 verde (5 jobs OK, 1m 9s).
-* A.2 · P1-6 Retention policy + ADR-012. Alcance mediano (SQL + endpoint/cron + ADR + tests). Duración: 60-90 min. ✅ 2026-08-08 · ADR-012 aprobado; migración `002_events_archive_log.sql`, módulo `src/prune/*`, endpoint `POST /admin/events/prune`, scheduler in-process (día 1 · 04:00 UTC), 24 tests nuevos (12 prune + 8 admin + 4 scheduler), deploy en modo `EVENTS_PRUNE_DRY_RUN=true` hasta ~2028-07.
-* A.3 · P1-5 Retry con circuit breaker + P2-5 Dead-letter queue. Alcance mediano combinado (~300-500 LOC). Duración: 90-120 min.
+* A.1 ✅ · P2-4 CI (GitHub Actions). Alcance chico (~50-100 líneas YAML). Duración: 30-45 min. **Cierre 2026-08-08 · commit `7d5a56a` · Actions run #109** verde (5 jobs OK, 1m 9s).
+* A.2 ✅ · P1-6 Retention policy + ADR-012. Alcance mediano (SQL + endpoint/cron + ADR + tests). Duración: 60-90 min. **Cierre 2026-08-08 · commit `c43d4ee`** · ADR-012 aprobado; migración `002_events_archive_log.sql`, módulo `src/prune/*`, endpoint `POST /admin/events/prune`, scheduler in-process (día 1 · 04:00 UTC), 24 tests nuevos (12 prune + 8 admin + 4 scheduler), deploy en modo `EVENTS_PRUNE_DRY_RUN=true` hasta ~2028-07.
+* A.3 ✅ · P1-5 Retry con circuit breaker + P2-5 Dead-letter queue. Alcance mediano combinado (~300-500 LOC). Duración: 90-120 min. **Cierre 2026-08-10 · commit `3fbc223` · Actions run 31460451382** verde (5 jobs OK). ADR-013 aprobado; migración `003_dead_letter_events.sql` (rol `mc_dlq` least-privilege + snapshot completo del payload que protege contra la purga ADR-012), `bot/src/resilience/*` (retry con jitter independiente + circuit breaker sliding window + logging estructurado de 14 campos + monitor de saturación >100), endpoint `POST /admin/dlq/replay` con token separado `ADMIN_DLQ_TOKEN`. Cierra estructuralmente el patrón del Incidente 001. Tests: bot 1123/1123 + api 218/218.
 
-Al cerrar Fase A: el bot resiste fallos silenciosos, la tabla events no crece infinita, cada commit posterior está validado por CI.
+**FASE A completa ✅ — Cimientos operacionales de Pulso completos.** El bot resiste fallos silenciosos (retry + breaker + DLQ), la tabla `events` no crece infinita (retención 24m + archivado B2 verificado), cada commit posterior está validado por CI (5 gates en push a `main`). Los 3 sub-hitos suman 4 ADRs firmados (011, 012, 013 + los que vinieran) y 3 incidentes documentados con retrospectiva (001 · cursor atascado, 002 · EventFX no desplegado, 003 · Vancorbus no era OP). Próximo hito: FASE B (slash commands).
 FASE B — Slash commands
 
 * B.1 · P2-1 Slash commands (`/players`, `/tps`, `/status`). Alcance grande (~500-800 LOC). Duración: 2-3 sesiones.
