@@ -1335,6 +1335,37 @@ del mundo real, con comandos de verificación concretos y un check
 final `rcon plugins` + `cat ops.json` + `grep -c '^ADMIN_.*=' infra/.env`
 como cierre auditable.
 
+**Decisión de dueño (2026-08-10, previa a FASE B).** Vancorbus es
+**OP permanente** en producción. Rationale: soy el dueño del
+servidor y necesito administrar el mundo — ejecutar comandos
+privilegiados de los módulos propios (`/evento` de EventFX, `/haunt`
+de debug de Herobrine, `/gamemode` en emergencias, `/give` para
+diagnóstico), así como cualquier futuro comando administrativo que
+introduzcan los plugins del monorepo. La checklist de nacimiento
+(ADR-014) codifica este paso como requisito verificable, y la regla
+operativa quedó guardada en la memoria persistente del asistente
+(`op` es siempre mutación; para inspeccionar OPs se lee `ops.json`).
+
+Los **amigos futuros** (Pacman26, Elrid, y quien venga) **NO serán
+OP**. Se les da permisos específicos por rol si algún flujo lo
+requiere (vía `bukkit.command.*` o permisos granulares del plugin
+correspondiente), pero por defecto entran como jugadores normales:
+whitelist sí, OP no. Esto preserva el principio de least-privilege
+del ecosistema (mismo espíritu de los tokens `ADMIN_DLQ_TOKEN` /
+`ADMIN_TOKEN` separados en el api, del rol `mc_dlq` en Postgres, y
+del `permission-default: op` de EventFX). Un amigo OP puede borrar
+el mundo con `/kill @e`, cambiar el clima, teletransportarse a
+coordenadas de spawn crítico, o cualquier acción irreversible que un
+diagnóstico posterior tendría que reconstruir desde backup —
+riesgo que no se paga con la comodidad de "que no tenga que pedirme
+permiso".
+
+Verificación (2026-08-10): `docker exec ... rcon-cli op Vancorbus`
+devuelve `Nothing changed. The player already is an operator` (fix
+del 2026-08-09 sigue vigente); `cat /data/ops.json` muestra una
+única entrada con UUID `71804e99-f2aa-32dc-bfcb-0ea5cfdda708`,
+`name: Vancorbus`, `level: 4`, `bypassesPlayerLimit: false`.
+
 ## Historial de retiros
 
 Registro de componentes decommissioned tras alcanzar v1.0. La política es

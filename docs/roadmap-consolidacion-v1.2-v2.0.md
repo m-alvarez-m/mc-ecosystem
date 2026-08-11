@@ -23,7 +23,7 @@ Al cerrar Fase C: v1.2 firmada oficialmente. Runbook al día.
 FASE D — Cierre de Genesis como v2.0
 Genesis se implementó por adelantado bajo el número v4.0 en el roadmap original. Se reconoce ese trabajo, se termina, se despliega a producción como v2.0 Insight, y se renumera el roadmap.
 
-* D.1 · ADR-013: v4.0 (Genesis) se convierte en v2.0 (Insight). Renumeración del roadmap documentada. Duración: 20-30 min.
+* D.1 · ADR-015: v4.0 (Genesis) se convierte en v2.0 (Insight). Renumeración del roadmap documentada. Duración: 20-30 min. **Nota**: hasta 2026-08-10 este ADR aparecía como "ADR-013" en el roadmap, colisionando con ADR-013 de resiliencia del bot (FASE A.3, ya firmado). Corregido a ADR-015 en el mismo commit que firma ADR-014 (checklist institucional).
 * D.2 · Terminar las features faltantes del dashboard según handoff. Duración: 2-3 sesiones.
 * D.3 · Autenticación básica (BasicAuth o token en URL) antes de exponer. Duración: 60-90 min.
 * D.4 · Añadir Genesis al `docker-compose.prod.yml`. Duración: 45 min.
@@ -33,7 +33,7 @@ Genesis se implementó por adelantado bajo el número v4.0 en el roadmap origina
 
 Al cerrar Fase D: Genesis vive en producción como v2.0 Insight con auth, runbook y tag firmado.
 FASE E — Regreso al roadmap ordenado
-Desde aquí el proyecto sigue el camino planeado, con el roadmap renumerado por ADR-013:
+Desde aquí el proyecto sigue el camino planeado, con el roadmap renumerado por ADR-015 (ver D.1):
 
 * v1.3 BlueMap — Mapa web + cementerio de muertes. ~1 semana.
 * v2.1 Memoria — Récords, rachas, "un día como hoy". ~1-2 semanas.
