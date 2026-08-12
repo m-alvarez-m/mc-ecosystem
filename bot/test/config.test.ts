@@ -7,6 +7,7 @@ import { loadConfig } from "../src/config/env";
 
 const ALL_VARS = [
   "DISCORD_BOT_TOKEN",
+  "DISCORD_CLIENT_ID",
   "DISCORD_GUILD_ID",
   "DISCORD_EVENTS_CHANNEL_ID",
   "PORT",
@@ -20,6 +21,7 @@ const ALL_VARS = [
 
 function setBaseValid(): void {
   process.env.DISCORD_BOT_TOKEN = "fake-token";
+  process.env.DISCORD_CLIENT_ID = "111222333444555666";
   process.env.DISCORD_GUILD_ID = "123456789012345678";
   process.env.DISCORD_EVENTS_CHANNEL_ID = "987654321098765432";
   process.env.PORT = "4000";

@@ -14,6 +14,7 @@ function fakeConfig(): Config {
   return {
     discord: {
       token: "fake-token",
+      clientId: "111222333444555666",
       guildId: "123456789012345678",
       eventsChannelId: "987654321098765432",
     },
