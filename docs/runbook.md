@@ -1568,6 +1568,180 @@ del 2026-08-09 sigue vigente); `cat /data/ops.json` muestra una
 única entrada con UUID `71804e99-f2aa-32dc-bfcb-0ea5cfdda708`,
 `name: Vancorbus`, `level: 4`, `bypassesPlayerLimit: false`.
 
+### Incidente 004 · rol Postgres `mc_dlq` sin flag LOGIN (2026-08-10 → 2026-08-12, retroactivo desde A.3)
+
+**Contexto.** Descubierto el 2026-08-12 durante la verificación
+runtime **CP-4/CP-5 de FASE B.1** (ADR-016), 30 h después del cierre
+de FASE A.3 (commit `3fbc223`, 2026-08-10). El endpoint del api
+`GET /admin/dlq/pending-count` — creado por el ADR-013 y consumido
+por el bot (`DlqMonitor`) y ahora también por `/status` línea 5 —
+devolvió `password authentication failed for user "mc_dlq"` al
+consultarlo con el `ADMIN_DLQ_TOKEN` correcto. El bot arrancaba
+loguéando `ADR-013 · resilience.executor_activo` (todas las vars
+de entorno estaban presentes y el subsistema se instanciaba
+técnicamente), pero **la cadena bot → api → Postgres no había sido
+verificada end-to-end** durante A.3.
+
+**Causa raíz.** El rol PostgreSQL `mc_dlq` fue creado durante la
+implementación del ADR-013 con el flag `NOLOGIN` implícito
+(probablemente un `ALTER ROLE mc_dlq PASSWORD '<v>'` que no incluyó
+`WITH LOGIN` explícito, o una re-creación posterior del rol por
+rebuild que resetó los atributos). `\du mc_dlq` en `psql` reveló
+`Cannot login` como uno de los attributes del rol. Postgres rechaza
+`connect` con el error de autenticación **sin distinguir** entre
+"password incorrecto" y "rol sin login" — de ahí que la traza inicial
+apuntara a los tokens y no al rol.
+
+**Detección.** Trazabilidad completa del diagnóstico durante CP-4/5
+de B.1:
+
+1. `curl -H "X-Admin-Token: $ADMIN_DLQ_TOKEN" http://localhost:3000/admin/dlq/pending-count`
+   → `500` con `password authentication failed for user "mc_dlq"`.
+2. Sanity check del token: `grep -c '^ADMIN_DLQ_TOKEN=' infra/.env` →
+   `1` (presente, formato correcto).
+3. Sanity check de la password: `grep -c '^MC_DLQ_PASSWORD=' infra/.env` →
+   `1` (presente, formato correcto).
+4. Prueba directa contra Postgres con las credenciales del `.env`:
+   `PGPASSWORD=<...> psql -U mc_dlq -d mc_events -c 'SELECT 1'` →
+   `FATAL: password authentication failed for user "mc_dlq"`.
+5. Inspección del rol dentro del `psql` como superuser:
+   `\du mc_dlq` → `Attributes: Cannot login`. **Bingo.**
+
+**Impacto real.** Cero eventos perdidos por suerte: en las 30 h
+entre el cierre de A.3 y este descubrimiento, **ningún handler
+falló** con `HandlerFailure` retriable/permanente que necesitara
+usar la ruta DLQ. Si hubiera fallado, `DlqClient.deposit()` habría
+lanzado `HTTP 500 (password authentication failed)`, el
+`ResilientExecutor` lo habría vuelto a intentar en su loop de
+retry, y eventualmente el `EventDispatcher` habría propagado un
+error no capturado hacia el `PollingEngine` — el mismo patrón de
+"cursor atascado silencioso" que el ADR-013 supuestamente cierra.
+En otras palabras: **ADR-013 estuvo en "luz roja invisible"**
+durante 30 h, blindado por la ausencia de fallos reales.
+
+Colateralmente, el `DlqMonitor` (chequeo cada 1 h del pending
+count) también estuvo fallando silencioso — su `onError` sólo
+loguea, no propaga. Revisando `docker logs mc-ecosystem-bot-1 |
+grep 'dlq.monitor'` post-fix, se observan warnings de
+autenticación cada hora durante las 30 h, jamás elevados a la
+atención del dueño.
+
+**Fix aplicado (2026-08-12).**
+
+```sql
+-- Como superuser en Postgres:
+ALTER ROLE mc_dlq WITH LOGIN PASSWORD '<valor de MC_DLQ_PASSWORD en infra/.env>';
+```
+
+Verificación end-to-end tras el fix (**exactamente** los pasos que
+CP-4/5 pedían):
+
+- `PGPASSWORD=<...> psql -U mc_dlq -d mc_events -c 'SELECT 1'` →
+  ` ?column? \n----------\n        1\n(1 row)`.
+- `curl -sS -H "X-Admin-Token: $ADMIN_DLQ_TOKEN" http://localhost:3000/admin/dlq/pending-count`
+  → `{"pending":0}`.
+
+Con eso, `/status` línea 5 ("DLQ pendientes: 0") pasó a mostrar el
+dato real en vez de "consulta fallida". Cadena completa
+bot → api → Postgres validada.
+
+**Aprendizaje que motivará extensión del ADR-014 CP-D (queda como
+TODO para próxima sesión, no ADR nuevo hoy).** El CP-D actual dice
+literalmente: *"verificación de runtime tras cualquier fase que
+toque volúmenes, plugins o env. La fase no se declara ✅ en el
+roadmap hasta que existe evidencia de runtime en el commit de
+cierre (log del contenedor, output de rcon, checksum de config,
+etc.), no sólo tests verdes o CI verde."* El Incidente 004 revela
+que **"log del contenedor"** no basta: el log del bot decía
+`resilience.executor_activo` (variables presentes + código
+compilado) pero la cadena runtime completa NO se había ejercitado.
+La extensión a firmar en un ADR próximo:
+
+> CP-D queda extendido a **verificación end-to-end contra sistemas
+> dependientes** (Postgres, Discord, B2, cualquier servicio
+> externo o interno del que dependa el subsistema afectado) con
+> las credenciales del runtime, no sólo con "variable presente en
+> `.env`" + "código compilado en el artefacto". Ejemplos concretos
+> por tipo de dependencia:
+>
+> - **Rol Postgres**: `psql -U <rol> -d <db> -c 'SELECT 1'` con
+>   `PGPASSWORD` del `.env` real → debe devolver `1`.
+> - **Endpoint api que requiere token**: `curl -H "X-Admin-Token:
+>   $TOKEN"` a la ruta afectada → debe devolver `2xx` con shape
+>   esperada.
+> - **Discord API**: `curl` a
+>   `/applications/{app}/guilds/{guild}/commands` con el token → debe
+>   devolver la lista de comandos registrados sin `401`.
+> - **B2**: `restic snapshots` con `RESTIC_PASSWORD` + credenciales
+>   → debe listar snapshots sin `signature does not match`.
+
+El nombre operativo tentativo del checkpoint extendido: **CP-D₂**
+(o `CP-E` en un ADR-015-post o ADR-017, TBD). Este runbook queda
+como fuente hasta que se firme.
+
+**Colateral operativo del incidente** (pequeño pero útil para
+futuras sesiones). El diagnóstico llevó ~15 min sólo porque el
+error de Postgres es genérico. Regla operativa nueva para el
+dueño y el asistente:
+
+> Ante `password authentication failed for user "X"` con
+> credenciales verificadas presentes en `.env`, el próximo paso
+> **no** es "probar de nuevo la password" — es `\du X` en `psql`
+> como superuser para descartar `Cannot login` u otros atributos
+> restrictivos del rol (`NOSUPERUSER`, `NOINHERIT` en cascadas,
+> expiración vía `VALID UNTIL`).
+
+Guardar como regla persistente del asistente cuando se firme la
+extensión de ADR-014.
+
+## Verificación antes de push — simular ambiente CI limpio
+
+Descubierto durante el push inicial de FASE B.1 (`c50ca79`,
+2026-08-12): la primera versión rompió CI en `test/config.test.ts`
+porque la fixture no incluía la nueva var `DISCORD_CLIENT_ID`. El
+test **pasó localmente** porque el `process.env` del shell del
+dueño tenía la var heredada del `bot/.env` real de dev, y `npm
+test` la vio a través del entorno de proceso — el gap sólo apareció
+en CI, donde el entorno arranca limpio.
+
+**Regla operativa: antes de todo push, correr los tests en un
+entorno con las variables de configuración vaciadas explícitamente**
+para cazar el leak-through de variables locales heredadas del
+shell:
+
+```bash
+# En bot/ (o cualquier subproyecto que valide env al arranque):
+DISCORD_BOT_TOKEN= DISCORD_CLIENT_ID= DISCORD_GUILD_ID= \
+DISCORD_EVENTS_CHANNEL_ID= ADMIN_DLQ_TOKEN= MC_DLQ_PASSWORD= \
+    npm test
+```
+
+Debe pasar en verde **antes** de `git push`. Si pasa localmente sin
+las vars y falla en CI, el diagnóstico es otro (versión de Node,
+diferencia de OS, permiso de red, etc.); si falla localmente y en
+CI, la causa raíz es el gap de la fixture y hay que arreglarlo antes
+de push.
+
+Aplica a cualquier test que use `loadConfig()` o similar. La misma
+lógica aplica a `api/`, `genesis/`, y a scripts nuevos como
+`bot/scripts/register-commands.ts` — cualquier código que consuma
+`process.env` con fail-fast debe probarse en el modo "sin ninguna
+var relevante" antes de push.
+
+**Alcance de la regla**: es institucional pero **NO** exige un
+hook automatizado por ahora — la disciplina humana con el comando
+de arriba es suficiente. Un pre-push hook o un job de CI extra
+que corra los tests con env vacío queda como posible extensión
+futura del ADR de CI (fuera del alcance de B.1).
+
+Referencia cruzada: la sección "Slash commands (B.1 · ADR-016) ·
+Nota sobre arquitectura de `.env` por servicio" documenta que cada
+aplicación del monorepo tiene su propio `.env` (`bot/.env`,
+`infra/.env`); el checkpoint CP-C de ADR-014 aplica **por servicio
+afectado**, no a un archivo único centralizado. Un test que falle
+por env vacío revela exactamente qué `.env` es la fuente real de
+esa var — útil para triaje.
+
 ## Historial de retiros
 
 Registro de componentes decommissioned tras alcanzar v1.0. La política es
