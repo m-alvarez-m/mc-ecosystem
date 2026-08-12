@@ -11,7 +11,7 @@ Objetivo: convertir Pulso de "funciona" a "es robusto". Cerrar las 4 tareas crí
 **FASE A completa ✅ — Cimientos operacionales de Pulso completos.** El bot resiste fallos silenciosos (retry + breaker + DLQ), la tabla `events` no crece infinita (retención 24m + archivado B2 verificado), cada commit posterior está validado por CI (5 gates en push a `main`). Los 3 sub-hitos suman 4 ADRs firmados (011, 012, 013 + los que vinieran) y 3 incidentes documentados con retrospectiva (001 · cursor atascado, 002 · EventFX no desplegado, 003 · Vancorbus no era OP). Próximo hito: FASE B (slash commands).
 FASE B — Slash commands
 
-* B.1 · P2-1 Slash commands (`/players`, `/tps`, `/status`). Alcance grande (~500-800 LOC). Duración: 2-3 sesiones.
+* B.1 ✅ · P2-1 Slash commands (`/players`, `/tps`, `/status`). Alcance grande (~500-800 LOC). Duración: 2-3 sesiones. **Cierre 2026-08-12 · ADR-016 firmado en `65d0bff` + implementación en commit siguiente**. Los 3 comandos ephemeral con TTL cache 10s (/players), freshness 90s (/tps), 9 líneas de salud incluyendo DLQ pendientes (/status). Endpoints nuevos api: `GET /players/online` + `GET /events/latest_by_type`. Script `register-commands` por-guild con fail-fast + log de evidencia + idempotencia. Regla anti-flakiness promovida a estándar del bot (ADR-016 D6). Bot pasa de "100% reactivo" a "consultable bajo demanda".
 
 Al cerrar Fase B: el bot deja de ser 100% reactivo. Se pueden pedir datos bajo demanda desde Discord.
 FASE C — Higiene institucional

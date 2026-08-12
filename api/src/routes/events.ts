@@ -183,7 +183,66 @@ export async function eventRoutes(app: FastifyInstance, deps: EventRoutesDeps) {
     );
     return { latest_id: result.rows[0]?.latest_id ?? null };
   });
+
+  // GET /events/latest_by_type?type=X&limit=N (B.1 · ADR-016 D3).
+  //
+  // Devuelve los últimos N eventos de un tipo dado, en orden DESC
+  // por id. Sirve para /tps (limit=1 sobre server.tps_sample) y para
+  // /status líneas 4 y 7 (limit=~50 sobre server.tps_sample con
+  // filtro client-side por umbral). El endpoint es genérico por tipo
+  // para ser reusable sin duplicar rutas.
+  //
+  // Sin auth: mismo criterio que GET /events y /players/online.
+  app.get<{ Querystring: LatestByTypeQuery }>(
+    "/events/latest_by_type",
+    { schema: { querystring: latestByTypeQuerySchema } },
+    async (request) => {
+      const q = request.query;
+      const limit = Math.min(
+        q.limit ? parseInt(q.limit, 10) : LATEST_DEFAULT_LIMIT,
+        LATEST_MAX_LIMIT,
+      );
+      const result = await pool.query(
+        `SELECT
+           id::text AS id,
+           event_uuid,
+           type,
+           v,
+           ts,
+           received_at,
+           player_uuid,
+           world,
+           x, y, z,
+           data
+         FROM events
+         WHERE type = $1
+         ORDER BY id DESC
+         LIMIT $2::int`,
+        [q.type, limit],
+      );
+      return { events: result.rows };
+    },
+  );
 }
+
+// Schema y límites de GET /events/latest_by_type.
+const latestByTypeQuerySchema = {
+  type: "object",
+  required: ["type"],
+  additionalProperties: false,
+  properties: {
+    type: { type: "string", minLength: 1 },
+    limit: { type: "string", pattern: "^[1-9]\\d*$" },
+  },
+} as const;
+
+interface LatestByTypeQuery {
+  type: string;
+  limit?: string;
+}
+
+const LATEST_DEFAULT_LIMIT = 1;
+const LATEST_MAX_LIMIT = 100;
 
 // Path transaccional: session.start con identidad válida.
 //

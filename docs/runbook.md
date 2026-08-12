@@ -1147,6 +1147,132 @@ nunca dejar el resultado al azar del run de CI**.
 Próximo hito: **FASE B · Slash commands** (P2-1). Nada en FASE A
 queda a medias.
 
+## Slash commands (B.1 · ADR-016)
+
+Estado del bot desde B.1: **cronista reactivo + consultable bajo
+demanda**. Tres comandos slash publicados en el guild de Discord
+como respuesta a interacciones de jugadores/dueño:
+
+- **`/players`** — jugadores actualmente online, ordenados por
+  tiempo de sesión, con formato temporal `<24h` relativo /
+  `≥24h` absoluto en `America/Monterrey`. TTL de cache: **10 s**
+  (POLL_INTERVAL_MS × 2).
+- **`/tps`** — TPS 1m del server con guardia de freshness de
+  **90 s**. Rancio → mensaje explícito "no disponible (último
+  sample de hace X)". Sin RCON: se lee el último
+  `server.tps_sample` del api.
+- **`/status`** — 9 líneas de salud del ecosistema: server
+  on/off, uptime server, jugadores online (nº), TPS 1m, DLQ
+  pendientes (evidencia silenciosa ADR-013), último evento
+  procesado, última alerta TPS bajo, versión + uptime del bot,
+  cursor vs latest_id (lag).
+
+Los 3 comandos son **ephemeral** (solo el ejecutante ve la
+respuesta) y **abiertos a todos los miembros del guild** (D4 ·
+lectura = abierto, mutación = admin).
+
+### Registro de slash commands (post-deploy)
+
+Los comandos se registran manualmente **por-guild** (no globalmente).
+El registro se hace desde el host, contra la superficie externa de
+Discord, con log de evidencia auditable.
+
+**Precondiciones**: `bot/.env` contiene las 3 vars requeridas —
+`DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_GUILD_ID`.
+Verificable sin exponer valores:
+
+```bash
+for var in DISCORD_BOT_TOKEN DISCORD_CLIENT_ID DISCORD_GUILD_ID; do
+    count=$(grep -c "^${var}=" mc-ecosystem/bot/.env || echo 0)
+    echo "$var → $count (esperado: 1)"
+done
+```
+
+**Ejecución** (idempotente, PUT reemplaza la lista completa —
+ejecuciones repetidas no duplican):
+
+```bash
+cd mc-ecosystem/bot && npm run register-commands
+```
+
+**Output esperado** (log de evidencia · matiz D2 del ADR-016):
+
+```
+[register-commands] guild=<id> · antes: N comandos
+[register-commands] publicando: players, tps, status
+[register-commands] PUT /applications/<app>/guilds/<guild>/commands → 200 OK
+[register-commands] después: 3 comandos
+[register-commands]   players  → id=<snowflake>
+[register-commands]   tps      → id=<snowflake>
+[register-commands]   status   → id=<snowflake>
+```
+
+Si alguna variable falta, el script **aborta antes de tocar
+Discord** con un mensaje explícito nombrando la variable faltante
+(fail-fast · ADR-016 D2, aplicación del principio CP-C de ADR-014).
+
+### Cuándo re-ejecutar `register-commands`
+
+- Añadir un comando nuevo, quitar uno, o cambiar la descripción
+  visible en el autocompletado de Discord.
+- Cambiar los `default_member_permissions` de un comando
+  (ej. futuros comandos administrativos).
+- **NO** es necesario tras un `docker restart` del bot: los
+  comandos ya registrados persisten del lado de Discord.
+
+### Verificar los 3 comandos en Discord tras el deploy
+
+1. Abrir Discord, ir al canal del guild donde el bot está
+   presente.
+2. Escribir `/` — deben aparecer `players`, `tps`, `status` en
+   el autocompletado (si no aparecen, esperar unos segundos por
+   la propagación del guild; global tardaría hasta 1 h).
+3. Ejecutar cada uno. Cada respuesta debe mostrar el badge
+   **"Sólo tú puedes ver esto"** (ephemeral).
+4. Sanity check contra la fuente de verdad: la cuenta de
+   `/players` debe coincidir con la SQL
+   `SELECT COUNT(*) FROM (session.start sin session.end posterior)`.
+
+### Troubleshooting
+
+- **"Interaction failed" en Discord**: el bot recibió la
+  interacción pero no respondió en 3 s. Causas típicas: api
+  caído (los 3 comandos consultan al api), o timeout del pool
+  HTTP. Ver logs del bot con `docker logs mc-ecosystem-bot-1
+  --tail 200 | grep slash`.
+- **Comando no aparece en autocompletado**: la registración no se
+  hizo o falló silenciosamente. Re-ejecutar `register-commands` y
+  revisar el output (deben verse los 3 IDs).
+- **Discord rate-limit al registrar**: Discord limita ~200
+  registraciones/día por bot. Si aparece 429, esperar 1 h. Se
+  registra **por-guild** justamente para minimizar este riesgo
+  (global propaga ~1 h y consume más quota).
+- **`/status` línea "subsistema no activo"**: `ADMIN_DLQ_TOKEN`
+  no está en el `.env` del bot. El DLQ está desactivado (modo
+  histórico, comportamiento pre-A.3); los otros 8 renglones
+  siguen mostrando datos reales.
+
+### Nota sobre arquitectura de `.env` por servicio
+
+Cada aplicación del monorepo tiene su propio `.env` — no hay un
+`.env` centralizado. El bot lee `bot/.env`; la infra compartida
+lee `infra/.env`. Los CPs del ADR-014 (especialmente CP-C ·
+secretos con formato correcto) **aplican por servicio afectado**,
+no a un archivo único. El script `register-commands` verifica
+específicamente `bot/.env` porque los secretos de Discord viven
+allí (nunca en `infra/.env`).
+
+### TODO explícito · auth bot ↔ api
+
+Los endpoints `GET /players/online` y `GET /events/latest_by_type`
+introducidos en B.1 (y todo el resto de la superficie del api) se
+consumen **sin auth** — sólo funciona porque el api está en la red
+interna de Docker Compose, inaccesible desde fuera. Cuando se
+decida exponer el api fuera de la red interna (para dashboards
+externos, integraciones, futura FASE E de v3.1-3.2 Interactive),
+un **ADR futuro** definirá la política de auth bot ↔ api. Hoy es
+riesgo aceptado, no oversight.
+
 ## Historial de incidentes
 
 Registro de incidentes en producción. Cada entrada captura contexto,

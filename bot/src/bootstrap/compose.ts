@@ -39,6 +39,15 @@ import {
   ExplorationHandler,
 } from "../handlers";
 import type { Client } from "discord.js";
+import {
+  attachSlashRouter,
+  handlePlayers,
+  handleStatus,
+  handleTps,
+  SlashApiClient,
+  TtlCache,
+  type OnlinePlayer,
+} from "../slash";
 
 // Composicion del grafo de dependencias del bot Pulso.
 //
@@ -223,12 +232,13 @@ export function composeApp(config: Config): App {
   // locales sin infra de DLQ). El monitor se conserva desactivado.
   let resilientExecutor: ResilientExecutor | undefined = undefined;
   let dlqMonitor: DlqMonitor | null = null;
+  let dlqClient: DlqClient | null = null;
   // Defensivo: config.resilience puede faltar en tests legacy que
   // fabrican Config a mano sin la sección nueva del ADR-013. Cero
   // resilience = modo histórico (comportamiento pre-A.3).
   const resilienceCfg = config.resilience;
   if (resilienceCfg !== undefined && resilienceCfg.dlqToken !== null) {
-    const dlqClient = new DlqClient({
+    dlqClient = new DlqClient({
       baseUrl: config.eventStore.baseUrl,
       adminToken: resilienceCfg.dlqToken,
       timeoutMs: config.eventStore.timeoutMs,
@@ -307,6 +317,49 @@ export function composeApp(config: Config): App {
         { err, code: err.code },
         "Iteracion de polling fallida",
       );
+    },
+  });
+
+  // ADR-016 · Slash commands B.1. Router se attachea al mismo Discord
+  // client. Los handlers reciben sólo lo que necesitan (inyección
+  // explícita por dependencia). El cliente HTTP nuevo apunta a los
+  // endpoints /players/online y /events/latest_by_type añadidos en B.1.
+  const slashApiClient = new SlashApiClient({
+    baseUrl: config.eventStore.baseUrl,
+    timeoutMs: config.eventStore.timeoutMs,
+  });
+  const playersCache = new TtlCache<OnlinePlayer[]>(10_000);
+  // /status línea 5: reusamos el DlqClient ya construido en el bloque
+  // ADR-013 si está activo. Sin token → dlqCountPending null → línea
+  // renderiza "subsistema no activo".
+  const dlqCountPending: (() => Promise<number>) | null =
+    dlqClient !== null ? () => dlqClient!.countPending() : null;
+  attachSlashRouter({
+    client,
+    logger,
+    handlers: {
+      players: (interaction) =>
+        handlePlayers(interaction, {
+          apiClient: slashApiClient,
+          now: () => new Date(),
+          cache: playersCache,
+        }),
+      tps: (interaction) =>
+        handleTps(interaction, {
+          apiClient: slashApiClient,
+          now: () => new Date(),
+        }),
+      status: (interaction) =>
+        handleStatus(interaction, {
+          apiClient: slashApiClient,
+          cursorStore,
+          snapshotRuntime: () => runtimeState.snapshot(),
+          dlqCountPending,
+          now: () => new Date(),
+          botVersion: resilienceCfg?.botVersion ?? "unknown",
+          processUptimeSeconds: () => process.uptime(),
+          tpsAlertThreshold: config.tps.alertThreshold,
+        }),
     },
   });
 

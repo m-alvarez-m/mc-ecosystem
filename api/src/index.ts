@@ -2,6 +2,7 @@ import Fastify, { FastifyServerOptions } from "fastify";
 import addFormats from "ajv-formats";
 import { eventRoutes } from "./routes/events";
 import { playerRoutes } from "./routes/players";
+import { playersOnlineRoutes } from "./routes/players-online";
 import { insightRoutes } from "./routes/insight";
 import { adminRoutes } from "./routes/admin";
 import { dlqRoutes } from "./routes/dlq";
@@ -36,6 +37,7 @@ app.get("/pack.zip", async (_request, reply) => {
 
 app.register(eventRoutes, { pool });
 app.register(playerRoutes, { pool });
+app.register(playersOnlineRoutes, { pool });
 app.register(insightRoutes, { pool });
 
 // ADR-012 · Retención de events. Se levanta el pool de mc_pruner

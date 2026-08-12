@@ -11,6 +11,7 @@ import { DEFAULT_FRESHNESS_THRESHOLD_MS } from "../handlers/freshness";
 export interface Config {
   discord: {
     token: string;
+    clientId: string;
     guildId: string;
     eventsChannelId: string;
   };
@@ -68,6 +69,7 @@ interface RequiredVar {
 
 const REQUIRED: RequiredVar[] = [
   { key: "DISCORD_BOT_TOKEN", description: "Token del bot (Discord Developer Portal)" },
+  { key: "DISCORD_CLIENT_ID", description: "Application ID del bot (para registro de slash commands, ADR-016)" },
   { key: "DISCORD_GUILD_ID", description: "ID numerico del servidor Discord destino" },
   { key: "DISCORD_EVENTS_CHANNEL_ID", description: "ID del canal donde el bot publica" },
   { key: "PORT", description: "Puerto HTTP para el endpoint /health" },
@@ -182,6 +184,7 @@ export function loadConfig(): Config {
   return {
     discord: {
       token: process.env.DISCORD_BOT_TOKEN!,
+      clientId: process.env.DISCORD_CLIENT_ID!,
       guildId: process.env.DISCORD_GUILD_ID!,
       eventsChannelId: process.env.DISCORD_EVENTS_CHANNEL_ID!,
     },
