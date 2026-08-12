@@ -14,10 +14,10 @@ FASE B — Slash commands
 * B.1 ✅ · P2-1 Slash commands (`/players`, `/tps`, `/status`). Alcance grande (~500-800 LOC). Duración: 2-3 sesiones. **Cierre oficial 2026-08-12** · ADR-016 firmado en `65d0bff` · implementación en `c50ca79` · regression fix en `f7314d9` · CI verde en run `31569178263` (5/5 gates, 55 s). Los 3 comandos ephemeral con TTL cache 10s (/players), freshness 90s (/tps), 9 líneas de salud incluyendo DLQ pendientes (/status). Endpoints nuevos api: `GET /players/online` + `GET /events/latest_by_type`. Script `register-commands` por-guild con fail-fast + log de evidencia + idempotencia. Regla anti-flakiness promovida a estándar del bot (ADR-016 D6). Bot pasa de "100% reactivo" a "consultable bajo demanda". **Cerrada con verificación humana CP-6 (screenshots de los 3 comandos ephemeral en Discord) + Incidente 004 documentado** (rol Postgres `mc_dlq` sin flag LOGIN desde A.3, descubierto durante CP-4/5, fix `ALTER ROLE ... WITH LOGIN`, motiva extensión CP-D₂ del ADR-014 en próximo ADR).
 
 Al cerrar Fase B: el bot deja de ser 100% reactivo. Se pueden pedir datos bajo demanda desde Discord.
-FASE C — Higiene institucional
+FASE C ✅ — Higiene institucional (cerrada 2026-08-12)
 
-* C.1 · Tag `v1.2` + actualizar runbook con secciones de operación del bot. Duración: 30-45 min.
-* C.2 · Actualizar `bot/README.md` y handoff v1.2 → v2.0. Duración: 30 min.
+* C.1 ✅ · Tag `v1.2` + runbook con secciones de operación del bot. Runbook incluye ya sección "Slash commands (B.1 · ADR-016)", "Verificación antes de push · simular ambiente CI limpio", y los 4 Incidentes documentados. Tag `v1.2` firmado en el commit de cierre de FASE C.
+* C.2 ✅ · `bot/README.md` reescrito con capacidades reales v1.2 (publicador de crónicas + retention + retry/DLQ + slash commands) y referencia a ADRs 011-016; se elimina la mención "Bootstrap inicial" heredada del template. Handoff v1.2 → v2.0 en [`docs/handoff-v1.2-a-v2.0.md`](handoff-v1.2-a-v2.0.md) consolida fases cerradas, ADRs firmados, incidentes, reglas institucionales, estado runtime, y próximos pasos para FASE D.
 
 Al cerrar Fase C: v1.2 firmada oficialmente. Runbook al día.
 FASE D — Cierre de Genesis como v2.0
